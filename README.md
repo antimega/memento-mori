@@ -55,8 +55,8 @@ docker compose build
 # Run with default settings
 docker compose run --rm memento-mori
 
-# Run with specific arguments
-docker compose run --rm memento-mori --output /output/my-site --quality 90
+# Run with specific arguments (relative paths refer to the project folder)
+docker compose run --rm memento-mori --input ./your-export-folder --output ./my-site --quality 90
 
 # Add Google Analytics tracking
 docker compose run --rm memento-mori --gtag-id G-DX1ZWTC9NZ

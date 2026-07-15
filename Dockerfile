@@ -22,6 +22,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
+# Make the package importable even when the container runs from a
+# different working directory (docker-compose uses /app/workspace)
+ENV PYTHONPATH=/app
+
 # Create directories for input/output
 RUN mkdir -p /input /output
 
