@@ -396,9 +396,13 @@ class InstagramDataLoader:
                     # Fallback to first media item timestamp if post timestamp not available
                     post_entry["t"] = item["post_data"]["media"][0]["creation_timestamp"]
 
-                post_entry["d"] = datetime.utcfromtimestamp(
-                    post_entry["t"]
-                ).strftime("%B %d, %Y at %I:%M %p")
+                # Some export formats (e.g. the newer posts.json) have entries
+                # without a usable creation_timestamp; leave "d" blank and let
+                # the missing-timestamp filter below skip them
+                if post_entry["t"]:
+                    post_entry["d"] = datetime.utcfromtimestamp(
+                        post_entry["t"]
+                    ).strftime("%B %d, %Y at %I:%M %p")
 
                 # Get title from post data
                 post_title = ""

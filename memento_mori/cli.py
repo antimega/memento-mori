@@ -11,6 +11,7 @@ from memento_mori.extractor import InstagramArchiveExtractor
 from memento_mori.loader import InstagramDataLoader
 from memento_mori.media import InstagramMediaProcessor
 from memento_mori.generator import InstagramSiteGenerator
+from memento_mori import merger
 
 
 def main():
@@ -71,6 +72,11 @@ def main():
         help="Google Analytics tag ID (e.g., 'G-DX1ZWTC9NZ') to add tracking to the generated site",
     )
     parser.add_argument(
+        "--merge",
+        action="store_true",
+        help="Merge a newer export (--input) into an existing generated site in --output",
+    )
+    parser.add_argument(
         "--verbose", "-v",
         action="store_true",
         help="Enable verbose output for debugging",
@@ -97,6 +103,25 @@ def main():
     # Create output directory
     output_dir = Path(args.output)
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    # In merge mode, load the existing site's data before doing any
+    # expensive work, and require an explicit input (auto-detect could pick
+    # an archive that is already part of the site)
+    existing = None
+    if args.merge:
+        if not args.input:
+            print("Error: --merge requires --input pointing to the new archive.")
+            return 1
+        try:
+            existing = merger.load_existing_site_data(output_dir, verbose=args.verbose)
+        except FileNotFoundError as e:
+            print(f"Error: {e}")
+            return 1
+        print(f"\n🔀 MERGE MODE")
+        print(f"   Existing site: {output_dir} ({len(existing['posts'])} posts, "
+              f"{len(existing['stories'])} stories, from {existing['source']})")
+        if existing["source"] == "html" and not args.gtag_id:
+            print("   Note: existing site has no data.json; if it used --gtag-id, pass it again.")
 
     # Initialize extractor with input path if specified
     extractor = InstagramArchiveExtractor(input_path=args.input)
@@ -161,6 +186,21 @@ def main():
         
         print(f"   Found {data['post_count']} posts from {data['profile']['username']}")
 
+        # In merge mode, only process posts/stories not already in the site
+        if args.merge:
+            posts_to_process = merger.compute_delta(existing["posts"], data["posts"])
+            stories_to_process = merger.compute_delta(
+                existing["stories"], data.get("stories", {})
+            )
+            print(f"\n🔀 COMPUTING MERGE DELTA")
+            print(f"   Posts: {len(existing['posts'])} existing, "
+                  f"{len(data['posts'])} in new archive, {len(posts_to_process)} new")
+            print(f"   Stories: {len(existing['stories'])} existing, "
+                  f"{len(data.get('stories', {}))} in new archive, {len(stories_to_process)} new")
+        else:
+            posts_to_process = data["posts"]
+            stories_to_process = data.get("stories", {})
+
         # Process media files
         print(f"\n🖼️  PROCESSING MEDIA")
         print(f"   Using {args.threads} threads, quality {args.quality}, max dimension {args.max_dimension}...")
@@ -169,16 +209,37 @@ def main():
             quality=args.quality, max_dimension=args.max_dimension
         )
         media_result = media_processor.process_media_files(
-            data["posts"], data["profile"]["profile_picture"], data.get("stories", {})
+            posts_to_process, data["profile"]["profile_picture"], stories_to_process
         )
 
-        # Update data with shortened filenames
-        data["posts"] = media_result["updated_post_data"]
-        data["profile"]["profile_picture"] = media_result["shortened_profile"]
-        
-        # Update stories data if it exists
-        if "stories" in data and media_result.get("updated_stories_data"):
-            data["stories"] = media_result["updated_stories_data"]
+        if args.merge:
+            # Union existing site data with the newly processed entries
+            data["posts"] = merger.merge_timestamp_dicts(
+                existing["posts"], media_result["updated_post_data"]
+            )
+            data["stories"] = merger.merge_timestamp_dicts(
+                existing["stories"], media_result.get("updated_stories_data") or {}
+            )
+            data["profile"]["profile_picture"] = media_result["shortened_profile"]
+            if not data["profile"]["profile_picture"] and existing.get("profile"):
+                # Fall back to the already-processed picture from the sidecar
+                data["profile"]["profile_picture"] = existing["profile"].get(
+                    "profile_picture", ""
+                )
+            data["date_range"] = merger.compute_date_range(data["posts"])
+            data["post_count"] = len(data["posts"])
+            data["story_count"] = len(data["stories"])
+            # Reuse the previous run's gtag ID unless a new one was given
+            if not args.gtag_id and existing["settings"].get("gtag_id"):
+                args.gtag_id = existing["settings"]["gtag_id"]
+        else:
+            # Update data with shortened filenames
+            data["posts"] = media_result["updated_post_data"]
+            data["profile"]["profile_picture"] = media_result["shortened_profile"]
+
+            # Update stories data if it exists
+            if "stories" in data and media_result.get("updated_stories_data"):
+                data["stories"] = media_result["updated_stories_data"]
 
         # Generate website with the loaded data
         print("\n🌐 GENERATING WEBSITE")

@@ -61,6 +61,10 @@ docker compose run --rm memento-mori --input ./your-export-folder --output ./my-
 # Add Google Analytics tracking
 docker compose run --rm memento-mori --gtag-id G-DX1ZWTC9NZ
 
+# Merge a newer export into the existing site in ./output
+# (only the new posts/stories are processed; existing media is kept)
+docker compose run --rm memento-mori --merge --input ./your-new-export-folder
+
 # Serve the output folder locally to preview in your browser
 python3 -m http.server -d output
 ```
@@ -98,6 +102,7 @@ Options:
 --thumbnail-size WxH Size of thumbnails [default: 292x292]
 --no-auto-detect Disable auto-detection (requires --input to be specified)
 --gtag-id ID     Google Analytics tag ID (e.g., 'G-DX1ZWTC9NZ') to add tracking to the generated site
+--merge          Merge a newer export (--input, required) into an existing generated site in --output
 --verbose, -v    Enable verbose output for debugging
 ```
 
@@ -113,6 +118,11 @@ python -m memento_mori.cli --input path/to/export.zip --output my-site
 
 # Use specific number of threads and image quality
 python -m memento_mori.cli --threads 8 --quality 90
+
+# Merge a newer export into an already-generated site (deduplicates by
+# timestamp and only processes media for the new posts/stories). The site
+# remembers its settings in output/data.json, so --gtag-id carries over.
+python -m memento_mori.cli --merge --input path/to/new-export --output ./output
 
 # Specify search directory for auto-detection
 python -m memento_mori.cli --search-dir ~/Downloads
