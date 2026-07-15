@@ -85,12 +85,35 @@ class InstagramSiteGenerator:
             if "stories" in self.data_package and self.data_package["stories"]:
                 self._generate_stories_html()
 
+            # Write the machine-readable sidecar used by --merge
+            self._write_data_json()
+
             print(f"Website successfully generated at {self.output_dir}")
             return True
 
         except Exception as e:
             print(f"Error generating website: {str(e)}")
             return False
+
+    def _write_data_json(self):
+        """
+        Write the full data package to a data.json sidecar in the output.
+
+        Later --merge runs read this to know what the site already contains
+        (and to carry settings like the gtag ID forward) without having to
+        parse the generated HTML.
+        """
+        sidecar = dict(self.data_package)
+        sidecar["settings"] = {
+            "gtag_id": self.gtag_id,
+            "generated_at": datetime.datetime.now().strftime("%Y-%m-%d"),
+            "schema_version": 1,
+        }
+
+        with open(self.output_dir / "data.json", "w", encoding="utf-8") as f:
+            json.dump(sidecar, f, ensure_ascii=False)
+
+        print(f"Wrote data sidecar: {self.output_dir / 'data.json'}")
 
     def _copy_static_assets(self):
         """Copy CSS and JS files to the output directory."""
