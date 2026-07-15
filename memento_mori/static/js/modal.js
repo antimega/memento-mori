@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const postCaption = document.getElementById('postCaption');
     const postStats = document.getElementById('postStats');
     const postDate = document.getElementById('postDate');
+    const postPlace = document.getElementById('postPlace');
     const postUsername = document.getElementById('postUsername');
     const postUserPic = document.getElementById('postUserPic');
     const sortLinks = document.querySelectorAll('.sort-link');
@@ -390,6 +391,12 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         postMedia.appendChild(mediaContainer);
+
+        // Set tagged place under the username, like Instagram does
+        if (postPlace) {
+            postPlace.textContent = post.pl || '';
+            postPlace.style.display = post.pl ? 'block' : 'none';
+        }
 
         // Set post caption
         if (post.tt) {

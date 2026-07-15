@@ -375,6 +375,10 @@ class InstagramDataLoader:
 
         simplified_data = {}
 
+        # Place names only exist in the newer-format posts.json entries;
+        # map them by timestamp so they can be attached to the classic entries
+        place_map = self._build_place_map()
+
         for index, item in enumerate(self.combined_data):
             # Initialize a new post entry with shortened keys
             post_entry = {
@@ -383,6 +387,7 @@ class InstagramDataLoader:
                 "t": "",     # creation_timestamp_unix
                 "d": "",     # creation_timestamp_readable
                 "tt": "",    # title
+                "pl": "",    # place name
                 "im": "",    # Impressions
                 "l": "",     # Likes
                 "c": "",     # Comments
@@ -493,6 +498,14 @@ class InstagramDataLoader:
             elif insights_title:
                 post_entry["tt"] = insights_title
 
+            # Attach place name if the newer-format data has one for this
+            # post (timestamps between the two formats can differ by 1s)
+            if post_entry["t"] and place_map:
+                for ts in (post_entry["t"], post_entry["t"] - 1, post_entry["t"] + 1):
+                    if ts in place_map:
+                        post_entry["pl"] = place_map[ts]
+                        break
+
             # Only add posts with valid timestamps
             if post_entry["t"]:
                 simplified_data[post_entry["t"]] = post_entry
@@ -509,6 +522,41 @@ class InstagramDataLoader:
             print(f"Posts date range: {datetime.utcfromtimestamp(int(list(sorted_data.keys())[-1])).strftime('%Y-%m-%d')} to {datetime.utcfromtimestamp(int(list(sorted_data.keys())[0])).strftime('%Y-%m-%d')}")
             
         return sorted_data
+
+    def _build_place_map(self):
+        """
+        Build a timestamp -> place name map from newer-format posts.json
+        entries (the classic posts_1.json format has no place data).
+
+        In the newer format, each post has a label_values entry titled
+        "Place" whose payload is a list of {label, value} fields including
+        the tagged location's "Name".
+        """
+        places = {}
+
+        for post in self.posts_data or []:
+            if "label_values" not in post or "timestamp" not in post:
+                continue
+
+            name = ""
+            for lv in post["label_values"]:
+                if lv.get("title") == "Place" and lv.get("dict"):
+                    for field in lv["dict"][0].get("dict", []):
+                        if field.get("label") == "Name" and field.get("value"):
+                            name = html.unescape(fix_text(field["value"]))
+                            break
+                    break
+
+            if name:
+                try:
+                    places[int(post["timestamp"])] = name
+                except (TypeError, ValueError):
+                    continue
+
+        if self.verbose and places:
+            print(f"Found place names for {len(places)} posts")
+
+        return places
 
     def load_followers_data(self):
         """

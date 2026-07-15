@@ -106,6 +106,26 @@ def merge_timestamp_dicts(existing, processed_delta):
     return merged
 
 
+def apply_place_names(merged, new_posts):
+    """
+    Copy place names ("pl") from freshly loaded post data onto merged
+    entries that lack one — posts kept from an older archive (whose format
+    has no place data) or merged before place support existed.
+
+    Returns the number of entries updated.
+    """
+    updated = 0
+    for key, entry in new_posts.items():
+        name = entry.get("pl")
+        if not name:
+            continue
+        existing_entry = merged.get(str(key))
+        if existing_entry is not None and not existing_entry.get("pl"):
+            existing_entry["pl"] = name
+            updated += 1
+    return updated
+
+
 def compute_date_range(posts):
     """
     Compute the display date range from a newest-first posts dict,

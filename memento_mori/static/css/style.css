@@ -248,6 +248,15 @@ main {
   flex-grow: 1;
 }
 
+.post-user-info {
+  flex-grow: 1;
+}
+
+.post-place {
+  font-size: 12px;
+  color: #8e8e8e;
+}
+
 .share-button {
   cursor: pointer;
   padding: 5px;
