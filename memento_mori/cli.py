@@ -214,9 +214,15 @@ def main():
 
         if args.merge:
             # Union existing site data with the newly processed entries
-            data["posts"] = merger.merge_timestamp_dicts(
+            merged_posts = merger.merge_timestamp_dicts(
                 existing["posts"], media_result["updated_post_data"]
             )
+            # Backfill place names onto posts the new archive knows about
+            # but that were kept from the existing site
+            updated_places = merger.apply_place_names(merged_posts, data["posts"])
+            if updated_places:
+                print(f"   Added place names to {updated_places} existing posts")
+            data["posts"] = merged_posts
             data["stories"] = merger.merge_timestamp_dicts(
                 existing["stories"], media_result.get("updated_stories_data") or {}
             )
