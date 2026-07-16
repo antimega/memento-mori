@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Memento Mori - {{ username }}'s Instagram Stories</title>
+    <title>Memento Mori - {{ username }}'s Timeline</title>
     <link rel="stylesheet" href="css/style.css">
     {% if gtag_id %}
     <!-- Google tag (gtag.js) -->
@@ -16,88 +16,10 @@
       gtag('config', '{{ gtag_id }}');
     </script>
     {% endif %}
-    <!-- Script to make stories data available to JavaScript -->
-    <script>
-        window.storiesData = {{ stories_data_json|safe }};
-    </script>
-    <!-- Load stories.js only, modal.js is not needed on this page -->
+    <!-- Post and story data for the in-page viewers -->
+    <script src="js/timeline-data.js"></script>
+    <script src="js/modal.js"></script>
     <script src="js/stories.js"></script>
-    <style>
-      /* Make videos full height in story viewer */
-      .story-media-container video {
-        width: 100%;
-        height: 100%;
-        max-height: 80vh;
-        object-fit: contain;
-      }
-      
-      /* Pause button styles */
-      .story-pause {
-        position: absolute;
-        top: 20px;
-        right: 70px;
-        color: white;
-        font-size: 30px;
-        cursor: pointer;
-        z-index: 2001;
-        width: 40px;
-        height: 40px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background-color: rgba(0, 0, 0, 0.5);
-        border-radius: 50%;
-      }
-      
-      /* 9:16 aspect ratio for story thumbnails */
-      .stories-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-        gap: 15px;
-        margin-top: 20px;
-      }
-      
-      .story-item {
-        position: relative;
-        cursor: pointer;
-        border-radius: 8px;
-        overflow: hidden;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        transition: transform 0.3s ease;
-      }
-      
-      .story-item:hover {
-        transform: translateY(-5px);
-      }
-      
-      .story-media {
-        position: relative;
-        width: 100%;
-        padding-bottom: 177.78%; /* 16:9 aspect ratio (9/16 = 0.5625, 1/0.5625 = 1.7778 or 177.78%) */
-        overflow: hidden;
-      }
-      
-      .story-media img {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-      }
-      
-      .story-info {
-        position: absolute;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        background: rgba(0,0,0,0.7);
-        color: white;
-        padding: 5px;
-        font-size: 12px;
-        text-align: center;
-      }
-    </style>
   </head>
   <body>
     <header>
@@ -125,13 +47,15 @@
                 <span class="stat-count" id="post-count">{{ post_count }}</span> posts
               </a>
             </div>
+            {% if has_stories %}
             <div class="stat">
-              <a href="stories.html" class="nav-link active">
+              <a href="stories.html" class="nav-link">
                 <span class="stat-count" id="story-count">{{ story_count }}</span> stories
               </a>
             </div>
+            {% endif %}
             <div class="stat">
-              <a href="timeline.html" class="nav-link">
+              <a href="timeline.html" class="nav-link active">
                 <span class="stat-count" id="day-count">{{ day_count }}</span> days
               </a>
             </div>
@@ -143,32 +67,70 @@
           </div>
         </div>
       </div>
-      
-      <div class="stories-container">
-        <h2 class="section-title">Stories</h2>
-        <div class="stories-grid">
-          {% for story in stories %}
-          <div class="story-item" data-index="{{ story.index }}" data-timestamp="{{ story.timestamp }}">
-            <div class="story-media">
-              {% if story.is_video %}
-              <div class="video-indicator">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
-                  <path d="M8 5v14l11-7z" fill="white"/>
-                </svg>
-              </div>
+
+      <div class="timeline-container">
+        {% for day in days %}
+        <section class="timeline-day">
+          <h2 class="timeline-day-header">{{ day.heading }}</h2>
+          {% if day.posts %}
+          <div class="timeline-row-label">{{ day.post_count }} post{{ 's' if day.post_count != 1 }}</div>
+          <div class="timeline-posts">
+            {% for post in day.posts %}
+            <a class="grid-item timeline-tile" data-index="{{ post.index }}" href="index.html?post={{ post.timestamp }}">
+              <img src="{{ post.display_media }}" alt="Instagram post"{{ post.lazy_load }}>
+              {% if post.is_video %}
+              <div class="video-indicator">▶ Video</div>
               {% endif %}
-              <img src="{{ story.media }}" alt="{{ story.caption|default('Instagram Story') }}" {{ story.lazy_load|safe }} onerror="this.onerror=null; this.src='{{ story.original_media }}';">
-            </div>
-            <div class="story-info">
-              <div class="story-date">{{ story.date }}</div>
-            </div>
+              {% if post.media_count > 1 %}
+              <div class="multi-indicator">⊞ {{ post.media_count }}</div>
+              {% endif %}
+            </a>
+            {% endfor %}
           </div>
-          {% endfor %}
-        </div>
+          {% endif %}
+          {% if day.stories %}
+          <div class="timeline-row-label">{{ day.story_count }} stor{{ 'ies' if day.story_count != 1 else 'y' }}</div>
+          <div class="timeline-stories">
+            {% for story in day.stories %}
+            <a class="story-item timeline-story-tile" data-index="{{ story.index }}" data-timestamp="{{ story.timestamp }}" href="stories.html?story={{ story.timestamp }}">
+              <img src="{{ story.media }}" alt="Instagram story"{{ story.lazy_load }} onerror="this.onerror=null; this.src='{{ story.original_media }}';">
+              {% if story.is_video %}
+              <div class="video-indicator">▶</div>
+              {% endif %}
+            </a>
+            {% endfor %}
+          </div>
+          {% endif %}
+        </section>
+        {% endfor %}
       </div>
     </main>
 
-    <!-- Story Viewer -->
+    <!-- Modal for post details (same structure as index.html) -->
+    <div class="post-modal" id="postModal">
+        <div class="close-modal" id="closeModal">✕</div>
+        <div class="modal-nav modal-prev" id="modalPrev">❮</div>
+        <div class="modal-nav modal-next" id="modalNext">❯</div>
+        <div class="post-modal-content">
+            <div class="post-media" id="postMedia"></div>
+            <div class="post-info">
+                <div class="post-header">
+                    <div class="post-user" id="postUserPic">
+                        <img src="{{ profile_picture }}" alt="Profile" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">
+                    </div>
+                    <div class="post-user-info">
+                        <div class="post-username" id="postUsername">{{ username }}</div>
+                        <div class="post-place" id="postPlace"></div>
+                    </div>
+                </div>
+                <div class="post-caption" id="postCaption"></div>
+                <div class="post-stats" id="postStats"></div>
+                <div class="post-date" id="postDate"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Story Viewer (same structure as stories.html) -->
     <div class="story-viewer" id="storyViewer">
       <div class="story-close" id="storyClose">✕</div>
       <div class="story-pause" id="storyPause">
@@ -191,7 +153,7 @@
         </div>
       </div>
     </div>
-    
+
     <footer>
       <div class="footer-content">
         <p>Generated on {{ generation_date }} with <a href="https://github.com/greg-randall/memento-mori">Memento Mori</a>.</p>

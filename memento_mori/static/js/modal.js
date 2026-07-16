@@ -173,7 +173,12 @@ document.addEventListener('DOMContentLoaded', function () {
     function attachGridItemListeners() {
         const gridItems = document.querySelectorAll('.grid-item');
         gridItems.forEach(item => {
-            item.addEventListener('click', function () {
+            item.addEventListener('click', function (e) {
+                // On the timeline page tiles are links (no-JS fallback);
+                // open the modal in place instead of navigating away
+                if (this.tagName === 'A') {
+                    e.preventDefault();
+                }
                 const postIndex = parseInt(this.getAttribute('data-index'));
                 openModal(postIndex);
             });

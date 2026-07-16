@@ -1040,3 +1040,104 @@ main {
   color: #262626;
   border-bottom: 2px solid #262626;
 }
+
+/* Timeline page */
+.timeline-container {
+  margin-top: 30px;
+}
+
+/* Story viewer pieces the stories page defines inline; needed here so the
+   viewer embedded on the timeline page is styled too */
+.story-pause {
+  position: absolute;
+  top: 20px;
+  right: 70px;
+  color: white;
+  font-size: 30px;
+  cursor: pointer;
+  z-index: 2001;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.5);
+  border-radius: 50%;
+}
+
+.story-media-container video {
+  width: 100%;
+  height: 100%;
+  max-height: 80vh;
+  object-fit: contain;
+}
+
+.timeline-day {
+  margin-bottom: 40px;
+}
+
+.timeline-day-header {
+  font-size: 18px;
+  font-weight: 600;
+  color: #262626;
+  margin: 0 0 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #dbdbdb;
+}
+
+.timeline-row-label {
+  font-size: 12px;
+  color: #8e8e8e;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 10px 0 6px;
+}
+
+.timeline-posts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.timeline-stories {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+/* Tiles are links; keep them looking like the grid tiles */
+a.timeline-tile,
+a.timeline-story-tile {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+}
+
+.timeline-story-tile {
+  position: relative;
+  aspect-ratio: 9/16;
+  overflow: hidden;
+  border-radius: 6px;
+  background-color: #000;
+}
+
+.timeline-story-tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.timeline-story-tile:hover img {
+  transform: scale(1.05);
+}
+
+@media (max-width: 480px) {
+  .timeline-posts {
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  }
+
+  .timeline-stories {
+    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  }
+}

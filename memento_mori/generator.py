@@ -85,6 +85,10 @@ class InstagramSiteGenerator:
             if "stories" in self.data_package and self.data_package["stories"]:
                 self._generate_stories_html()
 
+            # Generate timeline HTML if there is anything to show
+            if self.data_package.get("posts") or self.data_package.get("stories"):
+                self._generate_timeline_html()
+
             # Write the machine-readable sidecar used by --merge
             self._write_data_json()
 
@@ -181,6 +185,7 @@ class InstagramSiteGenerator:
             post_count=post_count,
             story_count=story_count,
             has_stories=story_count > 0,  # Flag to show stories link
+            day_count=self._timeline_day_count(),
             grid_html=grid_html,
             post_data_json=json.dumps(self.data_package["posts"], ensure_ascii=False),
             stories_data_json=json.dumps(stories_data, ensure_ascii=False),  # Add stories data
@@ -363,6 +368,7 @@ class InstagramSiteGenerator:
             date_range=date_range,
             post_count=post_count,
             story_count=story_count,
+            day_count=self._timeline_day_count(),
             stories=stories_list,
             stories_data_json=json.dumps(stories_data, ensure_ascii=False),
             generation_date=generation_date,
@@ -372,5 +378,145 @@ class InstagramSiteGenerator:
         # Write HTML file
         with open(self.output_dir / "stories.html", "w", encoding="utf-8") as f:
             f.write(html_content)
-        
+
         print(f"Generated stories HTML file: {self.output_dir / 'stories.html'}")
+
+    @staticmethod
+    def _day_of(timestamp_key):
+        """Calendar day (UTC) for a posts/stories dict key."""
+        return datetime.datetime.utcfromtimestamp(int(timestamp_key)).date()
+
+    def _timeline_day_count(self):
+        """Number of distinct calendar days that have a post or story."""
+        posts = self.data_package.get("posts", {}) or {}
+        stories = self.data_package.get("stories", {}) or {}
+        return len(
+            {self._day_of(k) for k in posts} | {self._day_of(k) for k in stories}
+        )
+
+    def _generate_timeline_html(self):
+        """
+        Generate timeline.html: all posts and stories grouped by calendar
+        day, newest day first, posts and stories in separate rows per day.
+        Tiles are plain links into the existing viewers
+        (index.html?post=... and stories.html?story=...).
+        """
+        profile_info = self.data_package["profile"]
+        date_range = self.data_package["date_range"]["range"]
+        post_count = self.data_package["post_count"]
+        story_count = self.data_package.get("story_count", 0)
+
+        # Get profile picture path and check for WebP version
+        profile_picture = profile_info["profile_picture"]
+        if profile_picture:
+            webp_path = re.sub(r"\.(jpg|jpeg|png|gif)$", ".webp", profile_picture, flags=re.I)
+            if os.path.exists(os.path.join(self.output_dir, webp_path)):
+                profile_picture = webp_path
+
+        generation_date = datetime.datetime.now().strftime("%Y-%m-%d")
+
+        posts_data = self.data_package.get("posts", {}) or {}
+        stories_data = self.data_package.get("stories", {}) or {}
+
+        # Group both kinds by calendar day; each dict is already sorted
+        # newest-first, so per-day order falls out of encounter order
+        days = {}
+
+        for timestamp, post in posts_data.items():
+            display_media = self._get_display_media(post)
+            days.setdefault(self._day_of(timestamp), {"posts": [], "stories": []})[
+                "posts"
+            ].append(
+                {
+                    "index": post["i"],
+                    "timestamp": str(timestamp),
+                    "display_media": display_media["url"],
+                    "is_video": display_media["is_video"],
+                    "media_count": len(post["m"]),
+                }
+            )
+
+        for timestamp, story in stories_data.items():
+            # Same 9:16 thumbnail fallback as the stories page
+            story_thumb = story.get("story_thumb")
+            if story_thumb and os.path.exists(os.path.join(self.output_dir, story_thumb)):
+                media_url = story_thumb
+            else:
+                media_url = self._get_display_media(story)["url"]
+
+            is_video = (
+                bool(re.search(r"\.(mp4|mov|avi|webm)$", story["m"][0], re.I))
+                if story["m"]
+                else False
+            )
+
+            days.setdefault(self._day_of(timestamp), {"posts": [], "stories": []})[
+                "stories"
+            ].append(
+                {
+                    "index": story["i"],
+                    "timestamp": str(timestamp),
+                    "media": media_url,
+                    "is_video": is_video,
+                    "original_media": story["m"][0] if story["m"] else "",
+                }
+            )
+
+        # Flatten to a newest-first list of days, lazy-loading everything
+        # after the first screenful of tiles
+        lazy_after = 30
+        tile_counter = 0
+        day_list = []
+
+        for day in sorted(days.keys(), reverse=True):
+            bucket = days[day]
+            for tile in bucket["posts"] + bucket["stories"]:
+                tile["lazy_load"] = (
+                    Markup(' loading="lazy"') if tile_counter >= lazy_after else ""
+                )
+                tile_counter += 1
+            day_list.append(
+                {
+                    "heading": day.strftime("%B %d, %Y"),
+                    "posts": bucket["posts"],
+                    "stories": bucket["stories"],
+                    "post_count": len(bucket["posts"]),
+                    "story_count": len(bucket["stories"]),
+                }
+            )
+
+        # The timeline hosts both viewers, which read window.postData /
+        # window.storiesData. Ship the data as a classic script file (works
+        # over file:// where fetch() would not) instead of inlining ~7MB
+        # into the page itself.
+        data_js = (
+            "window.postData = "
+            + json.dumps(posts_data, ensure_ascii=False)
+            + ";\nwindow.storiesData = "
+            + json.dumps(stories_data, ensure_ascii=False)
+            + ";\n"
+        )
+        with open(self.output_dir / "js" / "timeline-data.js", "w", encoding="utf-8") as f:
+            f.write(data_js)
+        print(f"Wrote timeline data: {self.output_dir / 'js' / 'timeline-data.js'}")
+
+        template = self.jinja_env.get_template("timeline.html")
+        html_content = template.render(
+            username=profile_info["username"],
+            profile_picture=profile_picture,
+            bio=profile_info.get("bio", ""),
+            profile=profile_info,
+            date_range=date_range,
+            post_count=post_count,
+            story_count=story_count,
+            has_stories=story_count > 0,
+            day_count=len(day_list),
+            days=day_list,
+            generation_date=generation_date,
+            gtag_id=self.gtag_id,
+        )
+
+        with open(self.output_dir / "timeline.html", "w", encoding="utf-8") as f:
+            f.write(html_content)
+
+        print(f"Generated timeline HTML file: {self.output_dir / 'timeline.html'}")

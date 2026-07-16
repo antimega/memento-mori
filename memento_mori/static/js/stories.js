@@ -20,7 +20,12 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize story items from the grid
     const storyGridItems = document.querySelectorAll('.story-item');
     storyGridItems.forEach(item => {
-        item.addEventListener('click', function() {
+        item.addEventListener('click', function(e) {
+            // On the timeline page tiles are links (no-JS fallback);
+            // open the story viewer in place instead of navigating away
+            if (this.tagName === 'A') {
+                e.preventDefault();
+            }
             const storyIndex = parseInt(this.getAttribute('data-index'));
             openStory(storyIndex);
         });

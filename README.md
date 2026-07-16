@@ -148,7 +148,8 @@ After the tool finishes processing your Instagram data:
 1. The website will be generated in the output directory (default: ./output)
 2. Open the `index.html` file in this directory with your web browser to view your Instagram archive
 3. Click on "stories" in your profile stats to view your Stories archive
-4. You can also upload the entire output directory to a web hosting service to share it online
+4. Click on "days" in your profile stats to open the timeline — all posts and stories grouped by date, newest first
+5. You can also upload the entire output directory to a web hosting service to share it online
 
 ## PHP Version (Alternative)
 For those who prefer the deprecated PHP implementation, there are a few notes in the deprecated_php_utility folder, but basically extract your data into the folder with the php file, and run
