@@ -9,6 +9,18 @@ from markupsafe import Markup
 import re
 import hashlib
 import base64
+import statistics
+
+
+def _slugify(name):
+    """Make a safe anchor slug from a city name."""
+    slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+    return slug or hashlib.md5(name.encode()).hexdigest()[:8]
+
+
+def _escape_inline_json(data):
+    """JSON-encode for embedding inside a <script> block via |safe."""
+    return json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
 
 
 class InstagramSiteGenerator:
@@ -26,6 +38,7 @@ class InstagramSiteGenerator:
         self.data_package = data_package
         self.output_dir = Path(output_dir)
         self.gtag_id = gtag_id  # Store the Google tag ID
+        self.cities = {}  # Populated by generate() from city_tags
 
         # Find template directory
         if template_dir is None:
@@ -78,9 +91,12 @@ class InstagramSiteGenerator:
             # Copy static assets
             self._copy_static_assets()
 
+            # Group tagged content by city (empty when no tags file exists)
+            self.cities = self._build_cities()
+
             # Generate HTML
             self._generate_html()
-            
+
             # Generate stories HTML if we have stories data
             if "stories" in self.data_package and self.data_package["stories"]:
                 self._generate_stories_html()
@@ -88,6 +104,14 @@ class InstagramSiteGenerator:
             # Generate timeline HTML if there is anything to show
             if self.data_package.get("posts") or self.data_package.get("stories"):
                 self._generate_timeline_html()
+
+            # Generate the cities page when anything is tagged
+            if self.cities:
+                self._generate_cities_html()
+
+            # Generate the (unlinked) editor page used for tagging
+            if self.data_package.get("posts") or self.data_package.get("stories"):
+                self._generate_edit_html()
 
             # Write the machine-readable sidecar used by --merge
             self._write_data_json()
@@ -108,6 +132,9 @@ class InstagramSiteGenerator:
         parse the generated HTML.
         """
         sidecar = dict(self.data_package)
+        # city_tags.json is the single source of truth for tags; don't let a
+        # stale copy ride along in data.json
+        sidecar.pop("city_tags", None)
         sidecar["settings"] = {
             "gtag_id": self.gtag_id,
             "generated_at": datetime.datetime.now().strftime("%Y-%m-%d"),
@@ -146,6 +173,12 @@ class InstagramSiteGenerator:
             # Copy stories.js to output
             shutil.copy2(stories_js, self.output_dir / "js" / "stories.js")
             print(f"Copied JS: stories.js")
+
+        # Copy vendored libraries (e.g. Leaflet for the cities map)
+        vendor_dir = self.static_dir / "vendor"
+        if vendor_dir.exists():
+            shutil.copytree(vendor_dir, self.output_dir / "vendor", dirs_exist_ok=True)
+            print("Copied vendor assets")
 
     def _generate_html(self):
         """Generate HTML using templates."""
@@ -186,6 +219,8 @@ class InstagramSiteGenerator:
             story_count=story_count,
             has_stories=story_count > 0,  # Flag to show stories link
             day_count=self._timeline_day_count(),
+            has_cities=bool(self.cities),
+            city_count=len(self.cities),
             grid_html=grid_html,
             post_data_json=json.dumps(self.data_package["posts"], ensure_ascii=False),
             stories_data_json=json.dumps(stories_data, ensure_ascii=False),  # Add stories data
@@ -369,6 +404,8 @@ class InstagramSiteGenerator:
             post_count=post_count,
             story_count=story_count,
             day_count=self._timeline_day_count(),
+            has_cities=bool(self.cities),
+            city_count=len(self.cities),
             stories=stories_list,
             stories_data_json=json.dumps(stories_data, ensure_ascii=False),
             generation_date=generation_date,
@@ -394,17 +431,87 @@ class InstagramSiteGenerator:
             {self._day_of(k) for k in posts} | {self._day_of(k) for k in stories}
         )
 
-    def _generate_timeline_html(self):
+    def _post_tile_ctx(self, timestamp, post):
+        """Template context for one post tile (shared by timeline/cities/editor)."""
+        display_media = self._get_display_media(post)
+        return {
+            "index": post["i"],
+            "timestamp": str(timestamp),
+            "display_media": display_media["url"],
+            "is_video": display_media["is_video"],
+            "media_count": len(post["m"]),
+            "lazy_load": Markup(' loading="lazy"'),
+        }
+
+    def _story_tile_ctx(self, timestamp, story):
+        """Template context for one story tile (shared by timeline/cities/editor)."""
+        # Same 9:16 thumbnail fallback as the stories page
+        story_thumb = story.get("story_thumb")
+        if story_thumb and os.path.exists(os.path.join(self.output_dir, story_thumb)):
+            media_url = story_thumb
+        else:
+            media_url = self._get_display_media(story)["url"]
+
+        is_video = (
+            bool(re.search(r"\.(mp4|mov|avi|webm)$", story["m"][0], re.I))
+            if story["m"]
+            else False
+        )
+        return {
+            "index": story["i"],
+            "timestamp": str(timestamp),
+            "media": media_url,
+            "is_video": is_video,
+            "original_media": story["m"][0] if story["m"] else "",
+            "lazy_load": Markup(' loading="lazy"'),
+        }
+
+    def _build_day_list(self):
         """
-        Generate timeline.html: all posts and stories grouped by calendar
-        day, newest day first, posts and stories in separate rows per day.
-        Tiles are plain links into the existing viewers
-        (index.html?post=... and stories.html?story=...).
+        Group all posts and stories by calendar day, newest day first.
+        Both source dicts are already sorted newest-first, so per-day order
+        falls out of encounter order. The first ~30 tiles load eagerly.
         """
+        posts_data = self.data_package.get("posts", {}) or {}
+        stories_data = self.data_package.get("stories", {}) or {}
+
+        days = {}
+        for timestamp, post in posts_data.items():
+            days.setdefault(self._day_of(timestamp), {"posts": [], "stories": []})[
+                "posts"
+            ].append(self._post_tile_ctx(timestamp, post))
+
+        for timestamp, story in stories_data.items():
+            days.setdefault(self._day_of(timestamp), {"posts": [], "stories": []})[
+                "stories"
+            ].append(self._story_tile_ctx(timestamp, story))
+
+        lazy_after = 30
+        tile_counter = 0
+        day_list = []
+
+        for day in sorted(days.keys(), reverse=True):
+            bucket = days[day]
+            for tile in bucket["posts"] + bucket["stories"]:
+                if tile_counter < lazy_after:
+                    tile["lazy_load"] = ""
+                tile_counter += 1
+            day_list.append(
+                {
+                    "heading": day.strftime("%B %d, %Y"),
+                    "month_key": day.strftime("%Y-%m"),
+                    "month_label": day.strftime("%B %Y"),
+                    "posts": bucket["posts"],
+                    "stories": bucket["stories"],
+                    "post_count": len(bucket["posts"]),
+                    "story_count": len(bucket["stories"]),
+                }
+            )
+        return day_list
+
+    def _page_context(self):
+        """Template context shared by every page's header/nav."""
         profile_info = self.data_package["profile"]
-        date_range = self.data_package["date_range"]["range"]
-        post_count = self.data_package["post_count"]
-        story_count = self.data_package.get("story_count", 0)
 
         # Get profile picture path and check for WebP version
         profile_picture = profile_info["profile_picture"]
@@ -413,77 +520,32 @@ class InstagramSiteGenerator:
             if os.path.exists(os.path.join(self.output_dir, webp_path)):
                 profile_picture = webp_path
 
-        generation_date = datetime.datetime.now().strftime("%Y-%m-%d")
+        story_count = self.data_package.get("story_count", 0)
+        cities = getattr(self, "cities", {}) or {}
+        return {
+            "username": profile_info["username"],
+            "profile_picture": profile_picture,
+            "bio": profile_info.get("bio", ""),
+            "profile": profile_info,
+            "date_range": self.data_package["date_range"]["range"],
+            "post_count": self.data_package["post_count"],
+            "story_count": story_count,
+            "has_stories": story_count > 0,
+            "day_count": self._timeline_day_count(),
+            "has_cities": bool(cities),
+            "city_count": len(cities),
+            "generation_date": datetime.datetime.now().strftime("%Y-%m-%d"),
+            "gtag_id": self.gtag_id,
+        }
 
+    def _generate_timeline_html(self):
+        """
+        Generate timeline.html: all posts and stories grouped by calendar
+        day, newest day first, posts and stories in separate rows per day.
+        """
         posts_data = self.data_package.get("posts", {}) or {}
         stories_data = self.data_package.get("stories", {}) or {}
-
-        # Group both kinds by calendar day; each dict is already sorted
-        # newest-first, so per-day order falls out of encounter order
-        days = {}
-
-        for timestamp, post in posts_data.items():
-            display_media = self._get_display_media(post)
-            days.setdefault(self._day_of(timestamp), {"posts": [], "stories": []})[
-                "posts"
-            ].append(
-                {
-                    "index": post["i"],
-                    "timestamp": str(timestamp),
-                    "display_media": display_media["url"],
-                    "is_video": display_media["is_video"],
-                    "media_count": len(post["m"]),
-                }
-            )
-
-        for timestamp, story in stories_data.items():
-            # Same 9:16 thumbnail fallback as the stories page
-            story_thumb = story.get("story_thumb")
-            if story_thumb and os.path.exists(os.path.join(self.output_dir, story_thumb)):
-                media_url = story_thumb
-            else:
-                media_url = self._get_display_media(story)["url"]
-
-            is_video = (
-                bool(re.search(r"\.(mp4|mov|avi|webm)$", story["m"][0], re.I))
-                if story["m"]
-                else False
-            )
-
-            days.setdefault(self._day_of(timestamp), {"posts": [], "stories": []})[
-                "stories"
-            ].append(
-                {
-                    "index": story["i"],
-                    "timestamp": str(timestamp),
-                    "media": media_url,
-                    "is_video": is_video,
-                    "original_media": story["m"][0] if story["m"] else "",
-                }
-            )
-
-        # Flatten to a newest-first list of days, lazy-loading everything
-        # after the first screenful of tiles
-        lazy_after = 30
-        tile_counter = 0
-        day_list = []
-
-        for day in sorted(days.keys(), reverse=True):
-            bucket = days[day]
-            for tile in bucket["posts"] + bucket["stories"]:
-                tile["lazy_load"] = (
-                    Markup(' loading="lazy"') if tile_counter >= lazy_after else ""
-                )
-                tile_counter += 1
-            day_list.append(
-                {
-                    "heading": day.strftime("%B %d, %Y"),
-                    "posts": bucket["posts"],
-                    "stories": bucket["stories"],
-                    "post_count": len(bucket["posts"]),
-                    "story_count": len(bucket["stories"]),
-                }
-            )
+        day_list = self._build_day_list()
 
         # The timeline hosts both viewers, which read window.postData /
         # window.storiesData. Ship the data as a classic script file (works
@@ -501,22 +563,172 @@ class InstagramSiteGenerator:
         print(f"Wrote timeline data: {self.output_dir / 'js' / 'timeline-data.js'}")
 
         template = self.jinja_env.get_template("timeline.html")
-        html_content = template.render(
-            username=profile_info["username"],
-            profile_picture=profile_picture,
-            bio=profile_info.get("bio", ""),
-            profile=profile_info,
-            date_range=date_range,
-            post_count=post_count,
-            story_count=story_count,
-            has_stories=story_count > 0,
-            day_count=len(day_list),
-            days=day_list,
-            generation_date=generation_date,
-            gtag_id=self.gtag_id,
-        )
+        html_content = template.render(days=day_list, **self._page_context())
 
         with open(self.output_dir / "timeline.html", "w", encoding="utf-8") as f:
             f.write(html_content)
 
         print(f"Generated timeline HTML file: {self.output_dir / 'timeline.html'}")
+
+    def _build_cities(self):
+        """
+        Group tagged posts/stories by city from the city_tags data.
+
+        Returns {name: {"posts": [tile_ctx...], "stories": [tile_ctx...],
+                        "lat": float|None, "lng": float|None, "newest": int}}
+        with items sorted newest-first per city. Coordinates come from a
+        manual override in the tags file when present, otherwise the median
+        of the tagged items' coordinates.
+        """
+        tags = self.data_package.get("city_tags") or {}
+        if not (tags.get("posts") or tags.get("stories")):
+            return {}
+
+        cities = {}
+        skipped = 0
+        raw = {}  # name -> {"posts": [(ts, entry)], "stories": [...], "coords": [...]}
+
+        for kind in ("posts", "stories"):
+            source = self.data_package.get(kind, {}) or {}
+            for ts, name in (tags.get(kind) or {}).items():
+                name = (name or "").strip()
+                entry = source.get(str(ts))
+                if not name or entry is None:
+                    skipped += 1
+                    continue
+                bucket = raw.setdefault(
+                    name, {"posts": [], "stories": [], "coords": []}
+                )
+                bucket[kind].append((str(ts), entry))
+                lat, lng = entry.get("la"), entry.get("lo")
+                if isinstance(lat, (int, float)) and isinstance(lng, (int, float)):
+                    bucket["coords"].append((lat, lng))
+
+        if skipped:
+            print(f"Warning: {skipped} city tags reference unknown or empty items; ignored")
+
+        overrides = tags.get("cities") or {}
+        for name, bucket in raw.items():
+            bucket["posts"].sort(key=lambda p: int(p[0]), reverse=True)
+            bucket["stories"].sort(key=lambda p: int(p[0]), reverse=True)
+
+            override = overrides.get(name) or {}
+            if isinstance(override.get("lat"), (int, float)) and isinstance(
+                override.get("lng"), (int, float)
+            ):
+                lat, lng = override["lat"], override["lng"]
+            elif bucket["coords"]:
+                lat = statistics.median(c[0] for c in bucket["coords"])
+                lng = statistics.median(c[1] for c in bucket["coords"])
+            else:
+                lat = lng = None
+
+            cities[name] = {
+                "posts": [self._post_tile_ctx(ts, e) for ts, e in bucket["posts"]],
+                "stories": [self._story_tile_ctx(ts, e) for ts, e in bucket["stories"]],
+                "lat": lat,
+                "lng": lng,
+                "newest": max(
+                    int(bucket["posts"][0][0]) if bucket["posts"] else 0,
+                    int(bucket["stories"][0][0]) if bucket["stories"] else 0,
+                ),
+            }
+        return cities
+
+    def _generate_cities_html(self):
+        """
+        Generate cities.html: per-city sections of tagged posts/stories,
+        a clickable city index, and a Leaflet map of city locations.
+        """
+        # Most-recently-active city first, matching the site's
+        # reverse-chronological feel everywhere else
+        ordered = sorted(
+            self.cities.items(), key=lambda kv: kv[1]["newest"], reverse=True
+        )
+
+        seen_slugs = set()
+        city_list = []
+        markers = []
+        for name, city in ordered:
+            slug = _slugify(name)
+            candidate = slug
+            counter = 2
+            while candidate in seen_slugs:
+                candidate = f"{slug}-{counter}"
+                counter += 1
+            slug = candidate
+            seen_slugs.add(slug)
+
+            city_list.append(
+                {
+                    "name": name,
+                    "slug": slug,
+                    "posts": city["posts"],
+                    "stories": city["stories"],
+                    "post_count": len(city["posts"]),
+                    "story_count": len(city["stories"]),
+                }
+            )
+            if city["lat"] is not None and city["lng"] is not None:
+                markers.append(
+                    {
+                        "name": name,
+                        "slug": slug,
+                        "lat": city["lat"],
+                        "lng": city["lng"],
+                        "posts": len(city["posts"]),
+                        "stories": len(city["stories"]),
+                    }
+                )
+
+        template = self.jinja_env.get_template("cities.html")
+        html_content = template.render(
+            cities=city_list,
+            city_markers_json=_escape_inline_json(markers),
+            **self._page_context(),
+        )
+
+        with open(self.output_dir / "cities.html", "w", encoding="utf-8") as f:
+            f.write(html_content)
+
+        print(f"Generated cities HTML file: {self.output_dir / 'cities.html'}")
+
+    def _generate_edit_html(self):
+        """
+        Generate edit.html: the standalone editor used to tag posts and
+        stories with city names. Not linked from the public site nav.
+        """
+        tags = self.data_package.get("city_tags") or {
+            "version": 1,
+            "posts": {},
+            "stories": {},
+            "cities": {},
+        }
+
+        # Group days into months for pagination (newest month first, which
+        # the day list's ordering already guarantees)
+        months = []
+        for day in self._build_day_list():
+            if not months or months[-1]["key"] != day["month_key"]:
+                months.append(
+                    {
+                        "key": day["month_key"],
+                        "label": day["month_label"],
+                        "days": [],
+                        "item_count": 0,
+                    }
+                )
+            months[-1]["days"].append(day)
+            months[-1]["item_count"] += day["post_count"] + day["story_count"]
+
+        template = self.jinja_env.get_template("edit.html")
+        html_content = template.render(
+            months=months,
+            city_tags_json=_escape_inline_json(tags),
+            **self._page_context(),
+        )
+
+        with open(self.output_dir / "edit.html", "w", encoding="utf-8") as f:
+            f.write(html_content)
+
+        print(f"Generated editor HTML file: {self.output_dir / 'edit.html'}")

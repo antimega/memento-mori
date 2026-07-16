@@ -103,6 +103,8 @@ Options:
 --no-auto-detect Disable auto-detection (requires --input to be specified)
 --gtag-id ID     Google Analytics tag ID (e.g., 'G-DX1ZWTC9NZ') to add tracking to the generated site
 --merge          Merge a newer export (--input, required) into an existing generated site in --output
+--city-tags PATH Path to city tags JSON exported from the editor [default: <output>/city_tags.json]
+--regenerate     Re-render the site HTML from the existing output's data.json (fast; no archive needed)
 --verbose, -v    Enable verbose output for debugging
 ```
 
@@ -150,6 +152,26 @@ After the tool finishes processing your Instagram data:
 3. Click on "stories" in your profile stats to view your Stories archive
 4. Click on "days" in your profile stats to open the timeline — all posts and stories grouped by date, newest first
 5. You can also upload the entire output directory to a web hosting service to share it online
+
+## Tagging Cities
+You can tag posts and stories with city names and get a cities page with a
+clickable index and a map:
+
+1. Open `edit.html` in your output folder (serve it locally, e.g. `python3 -m http.server -d output`)
+2. Type a city name in the editor panel, then click tiles to tag them — or use a day's "tag posts" / "tag stories" buttons to tag a whole day at once. Click again to untag.
+3. Click **Export city_tags.json** and save the download as `output/city_tags.json`
+4. Regenerate the site (takes seconds, no archive needed):
+```bash
+docker compose run --rm memento-mori --regenerate
+# or: python -m memento_mori.cli --regenerate
+```
+5. `cities.html` appears, with a "cities" link in the profile stats on every page
+
+Notes:
+- City map pins are computed from your posts' GPS data (rounded to ~1km, median per city). To pin a city manually, add to the tags file: `"cities": {"Berlin": {"lat": 52.52, "lng": 13.40}}`
+- The map loads OpenStreetMap tiles, so it needs an internet connection; everything else works offline
+- Unexported tagging changes live in your browser's localStorage — export before clearing site data
+- `edit.html` is generated into the output folder; delete it before publishing if you don't want the editor public
 
 ## PHP Version (Alternative)
 For those who prefer the deprecated PHP implementation, there are a few notes in the deprecated_php_utility folder, but basically extract your data into the folder with the php file, and run

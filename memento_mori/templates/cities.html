@@ -3,8 +3,9 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Memento Mori - {{ username }}'s Timeline</title>
+    <title>Memento Mori - {{ username }}'s Cities</title>
     <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
     {% if gtag_id %}
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id={{ gtag_id }}"></script>
@@ -20,6 +21,7 @@
     <script src="js/timeline-data.js"></script>
     <script src="js/modal.js"></script>
     <script src="js/stories.js"></script>
+    <script src="vendor/leaflet/leaflet.js"></script>
   </head>
   <body>
     <header>
@@ -55,17 +57,15 @@
             </div>
             {% endif %}
             <div class="stat">
-              <a href="timeline.html" class="nav-link active">
+              <a href="timeline.html" class="nav-link">
                 <span class="stat-count" id="day-count">{{ day_count }}</span> days
               </a>
             </div>
-            {% if has_cities %}
             <div class="stat">
-              <a href="cities.html" class="nav-link">
+              <a href="cities.html" class="nav-link active">
                 <span class="stat-count" id="city-count">{{ city_count }}</span> cities
               </a>
             </div>
-            {% endif %}
             {% if profile.follower_count is defined and profile.follower_count is not none %}
             <div class="stat">
               <span class="stat-count" id="follower-count">{{ profile.follower_count }}</span> followers
@@ -75,15 +75,24 @@
         </div>
       </div>
 
-      <div class="timeline-container">
-        {% for day in days %}
-        <section class="timeline-day">
-          <h2 class="timeline-day-header">{{ day.heading }}</h2>
-          {% if day.posts %}
-          <div class="timeline-row-label">{{ day.post_count }} post{{ 's' if day.post_count != 1 }}</div>
+      <div class="cities-container">
+        <div id="cityMap" class="city-map" style="height: 400px;"></div>
+
+        <nav class="city-index">
+          {% for city in cities %}
+          <a class="city-chip" href="#city-{{ city.slug }}">{{ city.name }}
+            <span class="city-chip-count">{{ city.post_count + city.story_count }}</span></a>
+          {% endfor %}
+        </nav>
+
+        {% for city in cities %}
+        <section class="timeline-day city-section" id="city-{{ city.slug }}">
+          <h2 class="timeline-day-header">{{ city.name }}</h2>
+          {% if city.posts %}
+          <div class="timeline-row-label">{{ city.post_count }} post{{ 's' if city.post_count != 1 }}</div>
           <div class="timeline-posts">
-            {% for post in day.posts %}
-            <a class="grid-item timeline-tile" data-index="{{ post.index }}" href="index.html?post={{ post.timestamp }}">
+            {% for post in city.posts %}
+            <a class="grid-item timeline-tile" data-index="{{ post.index }}" data-timestamp="{{ post.timestamp }}" href="index.html?post={{ post.timestamp }}">
               <img src="{{ post.display_media }}" alt="Instagram post"{{ post.lazy_load }}>
               {% if post.is_video %}
               <div class="video-indicator">▶ Video</div>
@@ -95,10 +104,10 @@
             {% endfor %}
           </div>
           {% endif %}
-          {% if day.stories %}
-          <div class="timeline-row-label">{{ day.story_count }} stor{{ 'ies' if day.story_count != 1 else 'y' }}</div>
+          {% if city.stories %}
+          <div class="timeline-row-label">{{ city.story_count }} stor{{ 'ies' if city.story_count != 1 else 'y' }}</div>
           <div class="timeline-stories">
-            {% for story in day.stories %}
+            {% for story in city.stories %}
             <a class="story-item timeline-story-tile" data-index="{{ story.index }}" data-timestamp="{{ story.timestamp }}" href="stories.html?story={{ story.timestamp }}">
               <img src="{{ story.media }}" alt="Instagram story"{{ story.lazy_load }} onerror="this.onerror=null; this.src='{{ story.original_media }}';">
               {% if story.is_video %}
@@ -160,6 +169,53 @@
         </div>
       </div>
     </div>
+
+    <script>
+      (function () {
+        var markers = {{ city_markers_json|safe }};
+        var mapEl = document.getElementById('cityMap');
+        if (!markers.length) { mapEl.style.display = 'none'; return; }
+
+        function initMap() {
+        var map = L.map('cityMap', { scrollWheelZoom: false, fadeAnimation: false });
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+        var bounds = [];
+        markers.forEach(function (c) {
+          var div = document.createElement('div');
+          var strong = document.createElement('strong');
+          strong.textContent = c.name;
+          div.appendChild(strong);
+          div.appendChild(document.createTextNode(' — ' + c.posts + ' posts, ' + c.stories + ' stories'));
+          div.appendChild(document.createElement('br'));
+          var a = document.createElement('a');
+          a.href = '#city-' + c.slug;
+          a.textContent = 'Jump to section';
+          div.appendChild(a);
+          L.marker([c.lat, c.lng]).addTo(map).bindPopup(div);
+          bounds.push([c.lat, c.lng]);
+        });
+        map.invalidateSize();
+        if (bounds.length > 1) {
+          map.fitBounds(bounds, { padding: [30, 30] });
+        } else {
+          map.setView(bounds[0], 10);
+        }
+        }
+
+        // Initialize only after layout is final, so Leaflet measures the
+        // real container size when fitting the bounds
+        if (document.readyState === 'complete') {
+          requestAnimationFrame(initMap);
+        } else {
+          window.addEventListener('load', function () {
+            requestAnimationFrame(initMap);
+          });
+        }
+      })();
+    </script>
 
     <footer>
       <div class="footer-content">

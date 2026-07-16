@@ -106,22 +106,27 @@ def merge_timestamp_dicts(existing, processed_delta):
     return merged
 
 
-def apply_place_names(merged, new_posts):
+def apply_post_metadata(merged, new_entries, fields=("pl", "la", "lo")):
     """
-    Copy place names ("pl") from freshly loaded post data onto merged
-    entries that lack one — posts kept from an older archive (whose format
-    has no place data) or merged before place support existed.
+    Backfill metadata fields (place name, coordinates) from freshly loaded
+    entries onto merged entries that lack them — entries kept from an older
+    archive (whose format has no such data) or merged before support
+    existed. Never overwrites a non-empty value.
 
     Returns the number of entries updated.
     """
     updated = 0
-    for key, entry in new_posts.items():
-        name = entry.get("pl")
-        if not name:
-            continue
+    for key, entry in new_entries.items():
         existing_entry = merged.get(str(key))
-        if existing_entry is not None and not existing_entry.get("pl"):
-            existing_entry["pl"] = name
+        if existing_entry is None:
+            continue
+        changed = False
+        for field in fields:
+            value = entry.get(field)
+            if value not in (None, "") and existing_entry.get(field) in (None, ""):
+                existing_entry[field] = value
+                changed = True
+        if changed:
             updated += 1
     return updated
 

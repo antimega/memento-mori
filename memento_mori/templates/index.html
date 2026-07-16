@@ -65,6 +65,13 @@
                 <span class="stat-count" id="day-count">{{ day_count }}</span> days
               </a>
             </div>
+            {% if has_cities %}
+            <div class="stat">
+              <a href="cities.html" class="nav-link">
+                <span class="stat-count" id="city-count">{{ city_count }}</span> cities
+              </a>
+            </div>
+            {% endif %}
             {% if profile.follower_count is defined and profile.follower_count is not none %}
             <div class="stat">
               <span class="stat-count" id="follower-count">{{ profile.follower_count }}</span> followers

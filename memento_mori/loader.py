@@ -8,6 +8,33 @@ from ftfy import fix_text
 from pathlib import Path
 
 
+def _parse_coord(value):
+    """Parse a latitude/longitude value, rounded to ~1km precision."""
+    try:
+        coord = round(float(value), 2)
+    except (TypeError, ValueError):
+        return None
+    # 0.0 is EXIF junk (null island), not a real coordinate
+    return coord if coord != 0.0 else None
+
+
+def _extract_exif_coords(obj):
+    """
+    Pull (lat, lng) from an object's media_metadata exif data, or None.
+    Works for both media items and story objects.
+    """
+    media_metadata = obj.get("media_metadata") or {}
+    for key in ("photo_metadata", "video_metadata"):
+        exif_data = (media_metadata.get(key) or {}).get("exif_data") or []
+        for entry in exif_data:
+            if "latitude" in entry and "longitude" in entry:
+                lat = _parse_coord(entry["latitude"])
+                lng = _parse_coord(entry["longitude"])
+                if lat is not None and lng is not None:
+                    return lat, lng
+    return None
+
+
 def fix_double_encoded_utf8(text):
     """
     Fix double-encoded UTF-8 sequences in text using ftfy.
@@ -375,9 +402,10 @@ class InstagramDataLoader:
 
         simplified_data = {}
 
-        # Place names only exist in the newer-format posts.json entries;
-        # map them by timestamp so they can be attached to the classic entries
-        place_map = self._build_place_map()
+        # Place names and coordinates only exist in the newer-format
+        # posts.json entries; map them by timestamp so they can be attached
+        # to the classic entries
+        meta_map = self._build_post_meta_map()
 
         for index, item in enumerate(self.combined_data):
             # Initialize a new post entry with shortened keys
@@ -388,6 +416,8 @@ class InstagramDataLoader:
                 "d": "",     # creation_timestamp_readable
                 "tt": "",    # title
                 "pl": "",    # place name
+                "la": "",    # latitude (rounded)
+                "lo": "",    # longitude (rounded)
                 "im": "",    # Impressions
                 "l": "",     # Likes
                 "c": "",     # Comments
@@ -498,12 +528,26 @@ class InstagramDataLoader:
             elif insights_title:
                 post_entry["tt"] = insights_title
 
-            # Attach place name if the newer-format data has one for this
-            # post (timestamps between the two formats can differ by 1s)
-            if post_entry["t"] and place_map:
+            # Attach place name / coordinates if the newer-format data has
+            # them for this post (timestamps between the two formats can
+            # differ by 1s)
+            if post_entry["t"] and meta_map:
                 for ts in (post_entry["t"], post_entry["t"] - 1, post_entry["t"] + 1):
-                    if ts in place_map:
-                        post_entry["pl"] = place_map[ts]
+                    if ts in meta_map:
+                        meta = meta_map[ts]
+                        if meta["pl"]:
+                            post_entry["pl"] = meta["pl"]
+                        if meta["la"] is not None and meta["lo"] is not None:
+                            post_entry["la"] = meta["la"]
+                            post_entry["lo"] = meta["lo"]
+                        break
+
+            # Classic-format fallback: exif coordinates on the media items
+            if post_entry["la"] == "" and "post_data" in item:
+                for media in item["post_data"].get("media", []):
+                    coords = _extract_exif_coords(media)
+                    if coords:
+                        post_entry["la"], post_entry["lo"] = coords
                         break
 
             # Only add posts with valid timestamps
@@ -523,40 +567,45 @@ class InstagramDataLoader:
             
         return sorted_data
 
-    def _build_place_map(self):
+    def _build_post_meta_map(self):
         """
-        Build a timestamp -> place name map from newer-format posts.json
-        entries (the classic posts_1.json format has no place data).
+        Build a timestamp -> {pl, la, lo} map from newer-format posts.json
+        entries (the classic posts_1.json format has no place data and only
+        occasional exif coordinates).
 
         In the newer format, each post has a label_values entry titled
-        "Place" whose payload is a list of {label, value} fields including
-        the tagged location's "Name".
+        "Place" (list of {label, value} fields including the location's
+        "Name") plus flat "Latitude"/"Longitude" label entries.
         """
-        places = {}
+        meta = {}
 
         for post in self.posts_data or []:
             if "label_values" not in post or "timestamp" not in post:
                 continue
 
             name = ""
+            lat = lng = None
             for lv in post["label_values"]:
                 if lv.get("title") == "Place" and lv.get("dict"):
                     for field in lv["dict"][0].get("dict", []):
                         if field.get("label") == "Name" and field.get("value"):
                             name = html.unescape(fix_text(field["value"]))
                             break
-                    break
+                elif lv.get("label") == "Latitude" and lv.get("value"):
+                    lat = _parse_coord(lv["value"])
+                elif lv.get("label") == "Longitude" and lv.get("value"):
+                    lng = _parse_coord(lv["value"])
 
-            if name:
+            if name or (lat is not None and lng is not None):
                 try:
-                    places[int(post["timestamp"])] = name
+                    meta[int(post["timestamp"])] = {"pl": name, "la": lat, "lo": lng}
                 except (TypeError, ValueError):
                     continue
 
-        if self.verbose and places:
-            print(f"Found place names for {len(places)} posts")
+        if self.verbose and meta:
+            print(f"Found place/location metadata for {len(meta)} posts")
 
-        return places
+        return meta
 
     def load_followers_data(self):
         """
@@ -711,6 +760,8 @@ class InstagramDataLoader:
                     "t": "",     # creation_timestamp_unix
                     "d": "",     # creation_timestamp_readable
                     "tt": "",    # title/caption
+                    "la": "",    # latitude (rounded)
+                    "lo": "",    # longitude (rounded)
                 }
                 
                 if self.verbose and index < 3:  # Only show details for first 3 stories
@@ -806,6 +857,18 @@ class InstagramDataLoader:
                                 if self.verbose and index < 3 and len(story_entry["m"]) <= 3:
                                     print(f"   Media found in media_map_data['{key}']: {media_item['uri']}")
                 
+                # Extract exif coordinates when present (rare for stories)
+                if isinstance(story, dict):
+                    coords = _extract_exif_coords(story)
+                    if not coords:
+                        for media_item in story.get("media", []) or []:
+                            if isinstance(media_item, dict):
+                                coords = _extract_exif_coords(media_item)
+                                if coords:
+                                    break
+                    if coords:
+                        story_entry["la"], story_entry["lo"] = coords
+
                 # Only add stories with valid timestamps and media
                 if story_entry["t"] and story_entry["m"]:
                     simplified_stories[str(story_entry["t"])] = story_entry

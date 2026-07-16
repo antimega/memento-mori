@@ -1,6 +1,7 @@
 # memento_mori/cli.py
 
 import os
+import json
 import argparse
 import multiprocessing
 from pathlib import Path
@@ -77,6 +78,17 @@ def main():
         help="Merge a newer export (--input) into an existing generated site in --output",
     )
     parser.add_argument(
+        "--city-tags",
+        type=str,
+        help="Path to city tags JSON exported from the editor [default: <output>/city_tags.json]",
+    )
+    parser.add_argument(
+        "--regenerate",
+        action="store_true",
+        help="Re-render the site HTML from the existing output's data.json; "
+             "skips archive extraction and media processing entirely",
+    )
+    parser.add_argument(
         "--verbose", "-v",
         action="store_true",
         help="Enable verbose output for debugging",
@@ -103,6 +115,64 @@ def main():
     # Create output directory
     output_dir = Path(args.output)
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Load city tags if a tags file exists (used by all modes)
+    city_tags_path = Path(args.city_tags) if args.city_tags else output_dir / "city_tags.json"
+    city_tags = None
+    if city_tags_path.exists():
+        try:
+            with open(city_tags_path, "r", encoding="utf-8") as f:
+                raw_tags = json.load(f)
+        except (json.JSONDecodeError, OSError) as e:
+            print(f"Error reading city tags file {city_tags_path}: {e}")
+            return 1
+        city_tags = {
+            "version": raw_tags.get("version", 1),
+            "posts": raw_tags.get("posts", {}) or {},
+            "stories": raw_tags.get("stories", {}) or {},
+            "cities": raw_tags.get("cities", {}) or {},
+        }
+        print(f"Loaded city tags: {len(city_tags['posts'])} posts, "
+              f"{len(city_tags['stories'])} stories from {city_tags_path}")
+    elif args.city_tags:
+        print(f"Error: --city-tags file not found: {args.city_tags}")
+        return 1
+
+    # Regenerate mode: re-render HTML from the existing site's data.json
+    # without touching an archive — the fast path for tag iteration
+    if args.regenerate:
+        if args.merge or args.input:
+            print("Error: --regenerate cannot be combined with --merge or --input.")
+            return 1
+        sidecar_path = output_dir / "data.json"
+        if not sidecar_path.exists():
+            print(f"Error: --regenerate requires {sidecar_path} (generate a site first).")
+            return 1
+        with open(sidecar_path, "r", encoding="utf-8") as f:
+            sidecar = json.load(f)
+        posts = sidecar.get("posts", {}) or {}
+        stories = sidecar.get("stories", {}) or {}
+        data = {
+            "profile": sidecar["profile"],
+            "location": sidecar.get("location", {"location": "Unknown"}),
+            "posts": posts,
+            "stories": stories,
+            "date_range": sidecar.get("date_range") or merger.compute_date_range(posts),
+            "post_count": len(posts),
+            "story_count": len(stories),
+            "city_tags": city_tags,
+        }
+        if not args.gtag_id:
+            args.gtag_id = (sidecar.get("settings") or {}).get("gtag_id")
+        print(f"\n♻️  REGENERATE MODE")
+        print(f"   {len(posts)} posts, {len(stories)} stories from {sidecar_path}")
+        generator = InstagramSiteGenerator(data, output_dir, gtag_id=args.gtag_id)
+        if generator.generate():
+            print("\n✅ PROCESS COMPLETE")
+            print(f"   Website regenerated at: {output_dir}")
+            return 0
+        print("\n❌ ERROR: Failed to regenerate website.")
+        return 1
 
     # In merge mode, load the existing site's data before doing any
     # expensive work, and require an explicit input (auto-detect could pick
@@ -217,15 +287,19 @@ def main():
             merged_posts = merger.merge_timestamp_dicts(
                 existing["posts"], media_result["updated_post_data"]
             )
-            # Backfill place names onto posts the new archive knows about
-            # but that were kept from the existing site
-            updated_places = merger.apply_place_names(merged_posts, data["posts"])
-            if updated_places:
-                print(f"   Added place names to {updated_places} existing posts")
-            data["posts"] = merged_posts
-            data["stories"] = merger.merge_timestamp_dicts(
+            merged_stories = merger.merge_timestamp_dicts(
                 existing["stories"], media_result.get("updated_stories_data") or {}
             )
+            # Backfill place names/coordinates onto entries the new archive
+            # knows about but that were kept from the existing site
+            updated_meta = merger.apply_post_metadata(merged_posts, data["posts"])
+            updated_meta += merger.apply_post_metadata(
+                merged_stories, data.get("stories", {})
+            )
+            if updated_meta:
+                print(f"   Added place/location metadata to {updated_meta} existing items")
+            data["posts"] = merged_posts
+            data["stories"] = merged_stories
             data["profile"]["profile_picture"] = media_result["shortened_profile"]
             if not data["profile"]["profile_picture"] and existing.get("profile"):
                 # Fall back to the already-processed picture from the sidecar
@@ -249,6 +323,7 @@ def main():
 
         # Generate website with the loaded data
         print("\n🌐 GENERATING WEBSITE")
+        data["city_tags"] = city_tags
         generator = InstagramSiteGenerator(data, output_dir, gtag_id=args.gtag_id)
         success = generator.generate()
 
