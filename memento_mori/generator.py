@@ -23,6 +23,61 @@ def _escape_inline_json(data):
     return json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
 
 
+# Optional entry fields dropped from serialized output when empty, to shrink
+# the JSON. Always kept: i, m, t, d, story_thumb (read directly by viewers).
+_OPTIONAL_ENTRY_FIELDS = ("pl", "tt", "im", "l", "c", "la", "lo")
+
+
+def _compact_entries(entries):
+    """
+    Return a copy of a posts/stories dict with empty optional fields removed.
+
+    Consumers use guarded access (truthy checks in the viewers, .get() in the
+    generator/merger), so a missing key behaves exactly like an empty one.
+    """
+    compact = {}
+    for key, entry in entries.items():
+        compact[key] = {
+            k: v
+            for k, v in entry.items()
+            if k not in _OPTIONAL_ENTRY_FIELDS or v not in ("", None)
+        }
+    return compact
+
+
+def _minify_html(html):
+    """
+    Strip insignificant whitespace from generated HTML: remove leading
+    indentation and blank lines. Inline spacing between elements is kept
+    (only line-leading whitespace is removed, which the browser collapses
+    anyway), and regions whose whitespace is significant — script, style,
+    textarea, pre, and Markdown (data-md) blocks — are preserved verbatim.
+    """
+    placeholders = []
+
+    def _stash(match):
+        placeholders.append(match.group(0))
+        return f"\x00{len(placeholders) - 1}\x00"
+
+    html = re.sub(
+        r"<(script|style|textarea|pre)\b[^>]*>.*?</\1>",
+        _stash,
+        html,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
+    html = re.sub(
+        r"<div[^>]*\bdata-md\b[^>]*>.*?</div>",
+        _stash,
+        html,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
+
+    html = re.sub(r"\n[ \t]+", "\n", html)
+    html = re.sub(r"\n{2,}", "\n", html)
+
+    return re.sub(r"\x00(\d+)\x00", lambda m: placeholders[int(m.group(1))], html)
+
+
 class InstagramSiteGenerator:
     """
     Class for generating the static website from processed Instagram data.
@@ -94,6 +149,9 @@ class InstagramSiteGenerator:
             # Group tagged content by city (empty when no tags file exists)
             self.cities = self._build_cities()
 
+            # Write the shared post/story data scripts the pages load
+            self._write_browser_data()
+
             # Generate HTML
             self._generate_html()
 
@@ -135,6 +193,9 @@ class InstagramSiteGenerator:
         # city_tags.json is the single source of truth for tags; don't let a
         # stale copy ride along in data.json
         sidecar.pop("city_tags", None)
+        # Drop empty optional fields to keep the sidecar small
+        sidecar["posts"] = _compact_entries(self.data_package.get("posts", {}) or {})
+        sidecar["stories"] = _compact_entries(self.data_package.get("stories", {}) or {})
         sidecar["settings"] = {
             "gtag_id": self.gtag_id,
             "generated_at": datetime.datetime.now().strftime("%Y-%m-%d"),
@@ -145,6 +206,29 @@ class InstagramSiteGenerator:
             json.dump(sidecar, f, ensure_ascii=False)
 
         print(f"Wrote data sidecar: {self.output_dir / 'data.json'}")
+
+    def _write_browser_data(self):
+        """
+        Write the post/story data as shared classic scripts that set
+        window.postData / window.storiesData. Every page that needs the data
+        loads these once (cached across pages) instead of inlining its own
+        copy, and it works over file:// where fetch() would not.
+        """
+        posts = _compact_entries(self.data_package.get("posts", {}) or {})
+        stories = _compact_entries(self.data_package.get("stories", {}) or {})
+
+        js_dir = self.output_dir / "js"
+        with open(js_dir / "posts-data.js", "w", encoding="utf-8") as f:
+            f.write("window.postData = " + json.dumps(posts, ensure_ascii=False) + ";\n")
+        with open(js_dir / "stories-data.js", "w", encoding="utf-8") as f:
+            f.write("window.storiesData = " + json.dumps(stories, ensure_ascii=False) + ";\n")
+
+        # Remove the old combined file if regenerating a pre-split site
+        stale = js_dir / "timeline-data.js"
+        if stale.exists():
+            stale.unlink()
+
+        print(f"Wrote browser data: {js_dir / 'posts-data.js'}, {js_dir / 'stories-data.js'}")
 
     def _copy_static_assets(self):
         """Copy CSS and JS files to the output directory."""
@@ -204,10 +288,8 @@ class InstagramSiteGenerator:
         # Current date for footer
         generation_date = datetime.datetime.now().strftime("%Y-%m-%d")
 
-        # Get stories data or empty dict if not available
-        stories_data = self.data_package.get("stories", {})
-
-        # Render the main template
+        # Render the main template. Post/story data is loaded from the shared
+        # js/posts-data.js file (written by _write_browser_data), not inlined.
         template = self.jinja_env.get_template("index.html")
         html_content = template.render(
             username=profile_info["username"],
@@ -222,15 +304,13 @@ class InstagramSiteGenerator:
             has_cities=bool(self.cities),
             city_count=len(self.cities),
             grid_html=grid_html,
-            post_data_json=json.dumps(self.data_package["posts"], ensure_ascii=False),
-            stories_data_json=json.dumps(stories_data, ensure_ascii=False),  # Add stories data
             generation_date=generation_date,
             gtag_id=self.gtag_id,  # Add Google tag ID
         )
 
         # Write HTML file
         with open(self.output_dir / "index.html", "w", encoding="utf-8") as f:
-            f.write(html_content)
+            f.write(_minify_html(html_content))
 
         print(f"Generated HTML file: {self.output_dir / 'index.html'}")
 
@@ -408,14 +488,13 @@ class InstagramSiteGenerator:
             has_cities=bool(self.cities),
             city_count=len(self.cities),
             stories=stories_list,
-            stories_data_json=json.dumps(stories_data, ensure_ascii=False),
             generation_date=generation_date,
             gtag_id=self.gtag_id,
         )
-        
+
         # Write HTML file
         with open(self.output_dir / "stories.html", "w", encoding="utf-8") as f:
-            f.write(html_content)
+            f.write(_minify_html(html_content))
 
         print(f"Generated stories HTML file: {self.output_dir / 'stories.html'}")
 
@@ -565,30 +644,16 @@ class InstagramSiteGenerator:
         day, newest day first, posts and stories in separate rows per day,
         paginated month by month.
         """
-        posts_data = self.data_package.get("posts", {}) or {}
-        stories_data = self.data_package.get("stories", {}) or {}
-        months = self._build_month_list()
-
         # The timeline hosts both viewers, which read window.postData /
-        # window.storiesData. Ship the data as a classic script file (works
-        # over file:// where fetch() would not) instead of inlining ~7MB
-        # into the page itself.
-        data_js = (
-            "window.postData = "
-            + json.dumps(posts_data, ensure_ascii=False)
-            + ";\nwindow.storiesData = "
-            + json.dumps(stories_data, ensure_ascii=False)
-            + ";\n"
-        )
-        with open(self.output_dir / "js" / "timeline-data.js", "w", encoding="utf-8") as f:
-            f.write(data_js)
-        print(f"Wrote timeline data: {self.output_dir / 'js' / 'timeline-data.js'}")
+        # window.storiesData from the shared js/posts-data.js + stories-data.js
+        # (written by _write_browser_data).
+        months = self._build_month_list()
 
         template = self.jinja_env.get_template("timeline.html")
         html_content = template.render(months=months, **self._page_context())
 
         with open(self.output_dir / "timeline.html", "w", encoding="utf-8") as f:
-            f.write(html_content)
+            f.write(_minify_html(html_content))
 
         print(f"Generated timeline HTML file: {self.output_dir / 'timeline.html'}")
 
@@ -734,7 +799,7 @@ class InstagramSiteGenerator:
         )
 
         with open(self.output_dir / "cities.html", "w", encoding="utf-8") as f:
-            f.write(html_content)
+            f.write(_minify_html(html_content))
 
         print(f"Generated cities HTML file: {self.output_dir / 'cities.html'}")
 
@@ -763,7 +828,7 @@ class InstagramSiteGenerator:
         )
 
         with open(self.output_dir / "edit.html", "w", encoding="utf-8") as f:
-            f.write(html_content)
+            f.write(_minify_html(html_content))
 
         print(f"Generated editor HTML file: {self.output_dir / 'edit.html'}")
 
@@ -776,6 +841,6 @@ class InstagramSiteGenerator:
         )
 
         with open(self.output_dir / "edit-cities.html", "w", encoding="utf-8") as f:
-            f.write(html_content)
+            f.write(_minify_html(html_content))
 
         print(f"Generated editor HTML file: {self.output_dir / 'edit-cities.html'}")

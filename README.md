@@ -23,7 +23,7 @@ docker compose run --rm memento-mori
 - Email addresses
 - Other private information
 
-Only share the generated output folder after processing with this tool.
+Only share the generated output folder after processing with this tool. Note that the generated site does include the location data attached to your posts (place names, and approximate coordinates rounded to ~1 km for any city maps you create) — this is the same location you originally attached when posting, but be aware it's there before publishing.
 
 ## How It Works
 Memento Mori processes your Instagram data export and generates a static site with your posts and stories, copying all your media files into an organized structure that can be viewed offline or hosted on your own website.
@@ -31,6 +31,11 @@ Memento Mori processes your Instagram data export and generates a static site wi
 ## Key Features
 - **Familiar Interface**: Grid layout with post details and carousel for multiple images
 - **Stories Support**: View your Instagram Stories with auto-progression and 9:16 aspect ratio display
+- **Timeline View**: Every post and story grouped by date, newest first, paginated month by month
+- **Cities**: Tag posts and stories by city and get a dedicated page with a clickable index and an interactive map; write a Markdown blurb for each city
+- **Favourites**: Star your best posts and stories so they surface first within each city
+- **Places**: Shows the tagged location under each post thumbnail, drawn from your archive's location data
+- **Incremental Updates**: Merge a fresh export into an existing site without reprocessing everything, and re-render the site in seconds after editing
 - **Media Optimization**: Converts images to WebP, generates thumbnails, and supports video playback
 - **Organization**: Sorts posts by various criteria with shareable links to specific content
 - **Profile Information**: Displays bio, website, and follower count from your Instagram profile
@@ -146,33 +151,73 @@ python -m memento_mori.cli --verbose
 ```
 
 ## Viewing Your Generated Site
-After the tool finishes processing your Instagram data:
-1. The website will be generated in the output directory (default: ./output)
-2. Open the `index.html` file in this directory with your web browser to view your Instagram archive
-3. Click on "stories" in your profile stats to view your Stories archive
-4. Click on "days" in your profile stats to open the timeline — all posts and stories grouped by date, newest first
-5. You can also upload the entire output directory to a web hosting service to share it online
+After the tool finishes processing your Instagram data, open `index.html` from the output directory (default: `./output`) in your browser. The profile stats double as navigation between the pages:
 
-## Tagging Cities
-You can tag posts and stories with city names and get a cities page with a
-clickable index and a map:
+- **posts** (`index.html`) — the main grid, sortable by newest, oldest, likes, comments, views, or random. Click any post to open it in a modal.
+- **stories** (`stories.html`) — your Stories with auto-progression and a 9:16 viewer.
+- **days** (`timeline.html`) — every post and story grouped by date, newest first, paginated one month at a time.
+- **cities** (`cities.html`) — appears once you've tagged posts with cities (see below); shows one city at a time with an interactive map and a clickable index.
 
-1. Open `edit.html` in your output folder (serve it locally, e.g. `python3 -m http.server -d output`)
-2. Type a city name in the editor panel, then click tiles to tag them — or use a day's "tag posts" / "tag stories" buttons to tag a whole day at once. Click again to untag. Switch the panel to ★ Favourite mode to mark favourites — favourited posts and stories appear first in their city's section on the cities page.
-3. Use the editor's "City text" page (`edit-cities.html`) to write a blurb for each city — Markdown is supported, with a live preview — shown under the city's heading on the cities page.
-4. Click **Export city_tags.json** and save the download as `output/city_tags.json`
-5. Regenerate the site (takes seconds, no archive needed):
+You can upload the entire output directory to any static web host to share it online. (The editor pages — see below — are generated too; delete `edit.html` and `edit-cities.html` before publishing if you don't want them public. `data.json` is only used by `--merge`/`--regenerate` and is never loaded by the site, so you can also leave it out of a published copy to save a few MB — just keep your own copy for future updates.)
+
+Most static hosts serve these text files with gzip/brotli compression automatically, which shrinks the transferred size by roughly 85% — so the over-the-wire cost is far smaller than the on-disk size.
+
+## Updating an Existing Site
+When you download a fresh export from Instagram later on, you don't need to rebuild from scratch. Use `--merge` to fold the new posts and stories into your existing site — only the new media is processed, and your city tags, favourites, and city text are preserved:
+```bash
+docker compose run --rm memento-mori --merge --input ./your-new-export-folder
+```
+Instagram's timestamps are stable across downloads, so tags applied to your old export still line up with the merged content.
+
+If you only changed `city_tags.json` (or want to re-render after upgrading the tool) and don't need to process any new media, `--regenerate` rebuilds all the HTML from the existing output in seconds:
 ```bash
 docker compose run --rm memento-mori --regenerate
-# or: python -m memento_mori.cli --regenerate
 ```
-6. `cities.html` appears, with a "cities" link in the profile stats on every page
 
-Notes:
-- City map pins are computed from your posts' GPS data (rounded to ~1km, median per city). To pin a city manually, add to the tags file: `"cities": {"Berlin": {"lat": 52.52, "lng": 13.40}}`
-- The map loads OpenStreetMap tiles, so it needs an internet connection; everything else works offline
-- Unexported tagging changes live in your browser's localStorage — export before clearing site data
-- `edit.html` is generated into the output folder; delete it before publishing if you don't want the editor public
+## Cities, Favourites & the Editor
+
+Alongside the viewer, Memento Mori generates a private **editor** (`edit.html` and `edit-cities.html`) for organising your archive. Nothing you do in the editor touches the site directly — it produces a single `city_tags.json` file that you save and regenerate from, so it's fast to iterate and easy to version.
+
+### The workflow
+
+1. **Open the editor.** Serve the output folder and open `edit.html`:
+   ```bash
+   python3 -m http.server -d output
+   # then browse to http://localhost:8000/edit.html
+   ```
+2. **Tag & favourite** (`edit.html`):
+   - Type a city name, then click posts/stories to tag them. Click again to untag.
+   - Use a day's **tag posts** / **tag stories** buttons to tag a whole day at once.
+   - Switch to **★ Favourite** mode and click tiles to star your favourites.
+   - Browse a month at a time with the month picker at the top.
+3. **City text** (`edit-cities.html`): write a short blurb for each city. **Markdown** is supported (headings, emphasis, links, lists) with a live preview.
+4. **Export.** Click **Export city_tags.json** and save the download as `output/city_tags.json`.
+5. **Regenerate** (takes seconds — no archive or media reprocessing needed):
+   ```bash
+   docker compose run --rm memento-mori --regenerate
+   # or: python -m memento_mori.cli --regenerate
+   ```
+
+A **cities** link now appears in every page's profile stats. The cities page shows one city at a time — click a city chip or a map marker to switch. Within each city, posts and stories are listed newest-first, with favourites pulled to the top and marked with a ★, and your city blurb rendered under the heading.
+
+### Notes
+
+- **Map pins** are computed automatically from your posts' location data (rounded to ~1 km, taken as the median per city). To override a pin manually, add coordinates to the city in `city_tags.json`:
+  ```json
+  "cities": { "Berlin": { "lat": 52.52, "lng": 13.40 } }
+  ```
+- The map loads OpenStreetMap tiles, so it needs an internet connection. Everything else in the site works fully offline.
+- Unexported edits live in your browser's localStorage, so you can come back to them later — but **export before clearing your browser data**. Use **Clear local changes** in the editor to discard them.
+- The `city_tags.json` format is plain and hand-editable:
+  ```json
+  {
+    "version": 1,
+    "posts":     { "<timestamp>": "London" },
+    "stories":   { "<timestamp>": "Porto" },
+    "favorites": { "posts": { "<timestamp>": true }, "stories": {} },
+    "cities":    { "London": { "lat": 51.51, "lng": -0.13, "text": "Home." } }
+  }
+  ```
 
 ## PHP Version (Alternative)
 For those who prefer the deprecated PHP implementation, there are a few notes in the deprecated_php_utility folder, but basically extract your data into the folder with the php file, and run
