@@ -130,8 +130,13 @@ main {
 
 .grid-item {
   position: relative;
-  aspect-ratio: 1/1;
   cursor: pointer;
+}
+
+/* The square image box inside a post tile; the place caption sits below */
+.grid-item .tile-media {
+  position: relative;
+  aspect-ratio: 1/1;
   overflow: hidden;
 }
 
@@ -142,6 +147,17 @@ main {
   object-fit: cover;
   transition: transform 0.3s ease;
   aspect-ratio: 1/1;
+}
+
+.tile-place {
+  min-height: 20px;
+  padding: 3px 2px 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #8e8e8e;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .grid-item:hover img,
@@ -1365,14 +1381,14 @@ body.fav-mode .editor-grid .timeline-story-tile {
   cursor: pointer;
 }
 
-.editor-month-nav {
+.month-nav {
   display: flex;
   align-items: center;
   gap: 10px;
   margin: 20px 0 10px;
 }
 
-.editor-month-nav select {
+.month-nav select {
   padding: 8px 10px;
   border: 1px solid #dbdbdb;
   border-radius: 6px;
@@ -1380,7 +1396,7 @@ body.fav-mode .editor-grid .timeline-story-tile {
   background: #fff;
 }
 
-.editor-month-nav button {
+.month-nav button {
   width: 36px;
   height: 36px;
   border: 1px solid #dbdbdb;
@@ -1390,14 +1406,162 @@ body.fav-mode .editor-grid .timeline-story-tile {
   cursor: pointer;
 }
 
-.editor-month-nav button:hover:not(:disabled) {
+.month-nav button:hover:not(:disabled) {
   background: #fafafa;
   border-color: #8e8e8e;
 }
 
-.editor-month-nav button:disabled {
+.month-nav button:disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+/* Editor page navigation */
+.editor-nav {
+  display: flex;
+  gap: 24px;
+  margin: 25px 0 0;
+  border-bottom: 1px solid #dbdbdb;
+}
+
+.editor-nav-link {
+  padding: 8px 2px 10px;
+  text-decoration: none;
+  color: #8e8e8e;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.editor-nav-link.active {
+  color: #262626;
+  border-bottom: 2px solid #262626;
+  margin-bottom: -1px;
+}
+
+/* City text editor page */
+.editor-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  flex-wrap: wrap;
+  margin: 15px 0 25px;
+}
+
+.editor-bar-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.editor-bar-actions button {
+  padding: 8px 14px;
+  border: none;
+  border-radius: 6px;
+  background: #0095f6;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.editor-bar-actions button:hover {
+  background: #1877f2;
+}
+
+.editor-bar-actions button.editor-secondary {
+  background: #efefef;
+  color: #262626;
+}
+
+.editor-bar-actions button.editor-secondary:hover {
+  background: #dbdbdb;
+}
+
+.city-card {
+  border: 1px solid #dbdbdb;
+  border-radius: 10px;
+  padding: 16px 18px;
+  margin-bottom: 20px;
+  background: #fff;
+}
+
+.city-card-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #262626;
+  margin: 0 0 10px;
+}
+
+.city-card-meta {
+  font-size: 12px;
+  font-weight: 400;
+  color: #8e8e8e;
+  margin-left: 8px;
+}
+
+.city-card-pip {
+  color: #0095f6;
+  font-size: 10px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.city-card textarea {
+  width: 100%;
+  min-height: 110px;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid #dbdbdb;
+  border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.city-text-preview {
+  margin-top: 10px;
+  padding: 10px 14px;
+  background: #fafafa;
+  border: 1px solid #efefef;
+  border-radius: 6px;
+}
+
+/* Rendered city text (cities page + editor preview) */
+.city-text {
+  max-width: 44em;
+  color: #262626;
+  line-height: 1.55;
+  margin: 0 0 16px;
+}
+
+.city-text p {
+  margin: 0 0 10px;
+}
+
+.city-text h1,
+.city-text h2,
+.city-text h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 12px 0 6px;
+}
+
+.city-text ul,
+.city-text ol {
+  margin: 0 0 10px;
+  padding-left: 22px;
+}
+
+.city-text a {
+  color: #00376b;
+}
+
+.city-text blockquote {
+  margin: 0 0 10px;
+  padding-left: 12px;
+  border-left: 3px solid #dbdbdb;
+  color: #8e8e8e;
 }
 
 @media (max-width: 700px) {

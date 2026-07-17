@@ -159,13 +159,14 @@ clickable index and a map:
 
 1. Open `edit.html` in your output folder (serve it locally, e.g. `python3 -m http.server -d output`)
 2. Type a city name in the editor panel, then click tiles to tag them — or use a day's "tag posts" / "tag stories" buttons to tag a whole day at once. Click again to untag. Switch the panel to ★ Favourite mode to mark favourites — favourited posts and stories appear first in their city's section on the cities page.
-3. Click **Export city_tags.json** and save the download as `output/city_tags.json`
-4. Regenerate the site (takes seconds, no archive needed):
+3. Use the editor's "City text" page (`edit-cities.html`) to write a blurb for each city — Markdown is supported, with a live preview — shown under the city's heading on the cities page.
+4. Click **Export city_tags.json** and save the download as `output/city_tags.json`
+5. Regenerate the site (takes seconds, no archive needed):
 ```bash
 docker compose run --rm memento-mori --regenerate
 # or: python -m memento_mori.cli --regenerate
 ```
-5. `cities.html` appears, with a "cities" link in the profile stats on every page
+6. `cities.html` appears, with a "cities" link in the profile stats on every page
 
 Notes:
 - City map pins are computed from your posts' GPS data (rounded to ~1km, median per city). To pin a city manually, add to the tags file: `"cities": {"Berlin": {"lat": 52.52, "lng": 13.40}}`

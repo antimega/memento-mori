@@ -6,7 +6,9 @@
     <title>Memento Mori - Editor</title>
     <link rel="stylesheet" href="css/style.css">
     <script>window.cityTags = {{ city_tags_json|safe }};</script>
+    <script src="js/editor-common.js"></script>
     <script src="js/editor.js"></script>
+    <script src="js/month-nav.js"></script>
   </head>
   <body>
     <header>
@@ -16,6 +18,11 @@
       </div>
     </header>
     <main>
+      <nav class="editor-nav">
+        <a href="edit.html" class="editor-nav-link active">Tag &amp; favourite</a>
+        <a href="edit-cities.html" class="editor-nav-link">City text</a>
+      </nav>
+
       <div class="editor-intro">
         <p>Tag posts and stories with city names. Type a city below, then click
         tiles (or a day's <em>tag</em> buttons) to toggle the tag. Switch to
@@ -40,7 +47,7 @@
         </div>
       </div>
 
-      <div class="editor-month-nav" id="monthNav">
+      <div class="month-nav" id="monthNav" data-store="mm_editor_month">
         <button type="button" id="prevMonth" title="Newer month">←</button>
         <select id="monthSelect">
           {% for month in months %}
@@ -64,13 +71,16 @@
           <div class="timeline-posts">
             {% for post in day.posts %}
             <div class="grid-item timeline-tile" data-kind="posts" data-timestamp="{{ post.timestamp }}">
-              <img src="{{ post.display_media }}" alt="Instagram post"{{ post.lazy_load }}>
-              {% if post.is_video %}
-              <div class="video-indicator">▶ Video</div>
-              {% endif %}
-              {% if post.media_count > 1 %}
-              <div class="multi-indicator">⊞ {{ post.media_count }}</div>
-              {% endif %}
+              <div class="tile-media">
+                <img src="{{ post.display_media }}" alt="Instagram post"{{ post.lazy_load }}>
+                {% if post.is_video %}
+                <div class="video-indicator">▶ Video</div>
+                {% endif %}
+                {% if post.media_count > 1 %}
+                <div class="multi-indicator">⊞ {{ post.media_count }}</div>
+                {% endif %}
+              </div>
+              <div class="tile-place">{{ post.place }}</div>
             </div>
             {% endfor %}
           </div>

@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memento Mori - Editor: City text</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script>window.cityTags = {{ city_tags_json|safe }};</script>
+    <script src="vendor/marked/marked.min.js"></script>
+    <script src="js/editor-common.js"></script>
+    <script src="js/editor-cities.js"></script>
+  </head>
+  <body>
+    <header>
+      <div class="header-content">
+        <a href="index.html" class="logo">Memento Mori — Editor</a>
+        <div class="date-range-header">{{ date_range }}</div>
+      </div>
+    </header>
+    <main>
+      <nav class="editor-nav">
+        <a href="edit.html" class="editor-nav-link">Tag &amp; favourite</a>
+        <a href="edit-cities.html" class="editor-nav-link active">City text</a>
+      </nav>
+
+      <div class="editor-intro">
+        <p>Write something about each city — <strong>Markdown</strong> is
+        supported (headings, <em>emphasis</em>, links, lists). The text
+        appears under the city's heading on the cities page. Changes are kept
+        in this browser until you export them.</p>
+        <p><a href="index.html">← Back to the site</a></p>
+      </div>
+
+      <div class="editor-bar">
+        <div class="editor-counts" id="editorCounts"></div>
+        <div class="editor-bar-actions">
+          <button type="button" id="exportTags">Export city_tags.json</button>
+          <button type="button" id="clearLocal" class="editor-secondary">Clear local changes</button>
+        </div>
+      </div>
+
+      <div id="cityTextList"></div>
+    </main>
+
+    <footer>
+      <div class="footer-content">
+        <p>Generated on {{ generation_date }} with <a href="https://github.com/greg-randall/memento-mori">Memento Mori</a>.</p>
+      </div>
+    </footer>
+  </body>
+</html>

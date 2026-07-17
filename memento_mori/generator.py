@@ -257,6 +257,7 @@ class InstagramSiteGenerator:
                     "is_video": display_media["is_video"],
                     "media_count": len(post["m"]),
                     "likes": post.get("l", ""),
+                    "place": post.get("pl", ""),
                     "lazy_load": Markup(' loading="lazy"') if i >= lazy_after else "",
                 }
             )
@@ -440,6 +441,7 @@ class InstagramSiteGenerator:
             "display_media": display_media["url"],
             "is_video": display_media["is_video"],
             "media_count": len(post["m"]),
+            "place": post.get("pl", ""),
             "lazy_load": Markup(' loading="lazy"'),
         }
 
@@ -538,14 +540,34 @@ class InstagramSiteGenerator:
             "gtag_id": self.gtag_id,
         }
 
+    def _build_month_list(self):
+        """
+        Group the day list into months (newest first) for paginated pages.
+        """
+        months = []
+        for day in self._build_day_list():
+            if not months or months[-1]["key"] != day["month_key"]:
+                months.append(
+                    {
+                        "key": day["month_key"],
+                        "label": day["month_label"],
+                        "days": [],
+                        "item_count": 0,
+                    }
+                )
+            months[-1]["days"].append(day)
+            months[-1]["item_count"] += day["post_count"] + day["story_count"]
+        return months
+
     def _generate_timeline_html(self):
         """
         Generate timeline.html: all posts and stories grouped by calendar
-        day, newest day first, posts and stories in separate rows per day.
+        day, newest day first, posts and stories in separate rows per day,
+        paginated month by month.
         """
         posts_data = self.data_package.get("posts", {}) or {}
         stories_data = self.data_package.get("stories", {}) or {}
-        day_list = self._build_day_list()
+        months = self._build_month_list()
 
         # The timeline hosts both viewers, which read window.postData /
         # window.storiesData. Ship the data as a classic script file (works
@@ -563,7 +585,7 @@ class InstagramSiteGenerator:
         print(f"Wrote timeline data: {self.output_dir / 'js' / 'timeline-data.js'}")
 
         template = self.jinja_env.get_template("timeline.html")
-        html_content = template.render(days=day_list, **self._page_context())
+        html_content = template.render(months=months, **self._page_context())
 
         with open(self.output_dir / "timeline.html", "w", encoding="utf-8") as f:
             f.write(html_content)
@@ -589,7 +611,11 @@ class InstagramSiteGenerator:
         raw = {}  # name -> {"posts": [(ts, entry)], "stories": [...], "coords": [...]}
 
         for kind in ("posts", "stories"):
-            source = self.data_package.get(kind, {}) or {}
+            # Freshly loaded posts are keyed by int timestamps while
+            # JSON-round-tripped data uses strings; normalize for lookup
+            source = {
+                str(k): v for k, v in (self.data_package.get(kind, {}) or {}).items()
+            }
             for ts, name in (tags.get(kind) or {}).items():
                 name = (name or "").strip()
                 entry = source.get(str(ts))
@@ -651,6 +677,7 @@ class InstagramSiteGenerator:
                 "stories": story_tiles,
                 "lat": lat,
                 "lng": lng,
+                "text": (overrides.get(name) or {}).get("text", ""),
                 "newest": max(all_ts) if all_ts else 0,
             }
         return cities
@@ -683,6 +710,7 @@ class InstagramSiteGenerator:
                 {
                     "name": name,
                     "slug": slug,
+                    "text": city.get("text", ""),
                     "posts": city["posts"],
                     "stories": city["stories"],
                     "post_count": len(city["posts"]),
@@ -728,21 +756,7 @@ class InstagramSiteGenerator:
         if "favorites" not in tags:
             tags["favorites"] = {"posts": {}, "stories": {}}
 
-        # Group days into months for pagination (newest month first, which
-        # the day list's ordering already guarantees)
-        months = []
-        for day in self._build_day_list():
-            if not months or months[-1]["key"] != day["month_key"]:
-                months.append(
-                    {
-                        "key": day["month_key"],
-                        "label": day["month_label"],
-                        "days": [],
-                        "item_count": 0,
-                    }
-                )
-            months[-1]["days"].append(day)
-            months[-1]["item_count"] += day["post_count"] + day["story_count"]
+        months = self._build_month_list()
 
         template = self.jinja_env.get_template("edit.html")
         html_content = template.render(
@@ -755,3 +769,16 @@ class InstagramSiteGenerator:
             f.write(html_content)
 
         print(f"Generated editor HTML file: {self.output_dir / 'edit.html'}")
+
+        # The city-text editor page shares the same embedded tags; its city
+        # list is built client-side from that state
+        template = self.jinja_env.get_template("edit-cities.html")
+        html_content = template.render(
+            city_tags_json=_escape_inline_json(tags),
+            **self._page_context(),
+        )
+
+        with open(self.output_dir / "edit-cities.html", "w", encoding="utf-8") as f:
+            f.write(html_content)
+
+        print(f"Generated editor HTML file: {self.output_dir / 'edit-cities.html'}")

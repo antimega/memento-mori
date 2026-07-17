@@ -20,6 +20,7 @@
     <script src="js/timeline-data.js"></script>
     <script src="js/modal.js"></script>
     <script src="js/stories.js"></script>
+    <script src="js/month-nav.js"></script>
   </head>
   <body>
     <header>
@@ -75,22 +76,37 @@
         </div>
       </div>
 
+      <div class="month-nav" id="monthNav" data-store="mm_timeline_month">
+        <button type="button" id="prevMonth" title="Newer month">←</button>
+        <select id="monthSelect">
+          {% for month in months %}
+          <option value="{{ month.key }}">{{ month.label }} ({{ month.item_count }})</option>
+          {% endfor %}
+        </select>
+        <button type="button" id="nextMonth" title="Older month">→</button>
+      </div>
+
       <div class="timeline-container">
-        {% for day in days %}
+        {% for month in months %}
+        <div class="timeline-month" data-month="{{ month.key }}" hidden>
+        {% for day in month.days %}
         <section class="timeline-day">
           <h2 class="timeline-day-header">{{ day.heading }}</h2>
           {% if day.posts %}
           <div class="timeline-row-label">{{ day.post_count }} post{{ 's' if day.post_count != 1 }}</div>
           <div class="timeline-posts">
             {% for post in day.posts %}
-            <a class="grid-item timeline-tile" data-index="{{ post.index }}" href="index.html?post={{ post.timestamp }}">
-              <img src="{{ post.display_media }}" alt="Instagram post"{{ post.lazy_load }}>
-              {% if post.is_video %}
-              <div class="video-indicator">▶ Video</div>
-              {% endif %}
-              {% if post.media_count > 1 %}
-              <div class="multi-indicator">⊞ {{ post.media_count }}</div>
-              {% endif %}
+            <a class="grid-item timeline-tile" data-index="{{ post.index }}" data-timestamp="{{ post.timestamp }}" href="index.html?post={{ post.timestamp }}">
+              <div class="tile-media">
+                <img src="{{ post.display_media }}" alt="Instagram post"{{ post.lazy_load }}>
+                {% if post.is_video %}
+                <div class="video-indicator">▶ Video</div>
+                {% endif %}
+                {% if post.media_count > 1 %}
+                <div class="multi-indicator">⊞ {{ post.media_count }}</div>
+                {% endif %}
+              </div>
+              <div class="tile-place">{{ post.place }}</div>
             </a>
             {% endfor %}
           </div>
@@ -109,6 +125,8 @@
           </div>
           {% endif %}
         </section>
+        {% endfor %}
+        </div>
         {% endfor %}
       </div>
     </main>
