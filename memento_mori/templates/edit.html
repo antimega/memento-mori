@@ -18,12 +18,17 @@
     <main>
       <div class="editor-intro">
         <p>Tag posts and stories with city names. Type a city below, then click
-        tiles (or a day's <em>tag</em> buttons) to toggle the tag. Changes are
-        kept in this browser until you export them.</p>
+        tiles (or a day's <em>tag</em> buttons) to toggle the tag. Switch to
+        ★&nbsp;Favourite mode to mark favourites — they appear first in each
+        city's section. Changes are kept in this browser until you export them.</p>
         <p><a href="index.html">← Back to the site</a></p>
       </div>
 
       <div class="editor-panel" id="editorPanel">
+        <div class="editor-mode" id="editorMode">
+          <label><input type="radio" name="editMode" value="tag" checked> Tag city</label>
+          <label><input type="radio" name="editMode" value="fav"> ★ Favourite</label>
+        </div>
         <label for="cityInput">City</label>
         <input type="text" id="cityInput" list="cityNames" placeholder="e.g. Porto" autocomplete="off">
         <datalist id="cityNames"></datalist>

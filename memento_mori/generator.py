@@ -608,9 +608,19 @@ class InstagramSiteGenerator:
             print(f"Warning: {skipped} city tags reference unknown or empty items; ignored")
 
         overrides = tags.get("cities") or {}
+        favorites = tags.get("favorites") or {}
+        fav_posts = favorites.get("posts") or {}
+        fav_stories = favorites.get("stories") or {}
+
         for name, bucket in raw.items():
-            bucket["posts"].sort(key=lambda p: int(p[0]), reverse=True)
-            bucket["stories"].sort(key=lambda p: int(p[0]), reverse=True)
+            # Favourited items first, then reverse-chronological within
+            # each group
+            bucket["posts"].sort(
+                key=lambda p: (not fav_posts.get(p[0]), -int(p[0]))
+            )
+            bucket["stories"].sort(
+                key=lambda p: (not fav_stories.get(p[0]), -int(p[0]))
+            )
 
             override = overrides.get(name) or {}
             if isinstance(override.get("lat"), (int, float)) and isinstance(
@@ -623,15 +633,25 @@ class InstagramSiteGenerator:
             else:
                 lat = lng = None
 
+            post_tiles = []
+            for ts, e in bucket["posts"]:
+                tile = self._post_tile_ctx(ts, e)
+                tile["is_fav"] = bool(fav_posts.get(ts))
+                post_tiles.append(tile)
+
+            story_tiles = []
+            for ts, e in bucket["stories"]:
+                tile = self._story_tile_ctx(ts, e)
+                tile["is_fav"] = bool(fav_stories.get(ts))
+                story_tiles.append(tile)
+
+            all_ts = [int(ts) for ts, _ in bucket["posts"] + bucket["stories"]]
             cities[name] = {
-                "posts": [self._post_tile_ctx(ts, e) for ts, e in bucket["posts"]],
-                "stories": [self._story_tile_ctx(ts, e) for ts, e in bucket["stories"]],
+                "posts": post_tiles,
+                "stories": story_tiles,
                 "lat": lat,
                 "lng": lng,
-                "newest": max(
-                    int(bucket["posts"][0][0]) if bucket["posts"] else 0,
-                    int(bucket["stories"][0][0]) if bucket["stories"] else 0,
-                ),
+                "newest": max(all_ts) if all_ts else 0,
             }
         return cities
 
@@ -703,7 +723,10 @@ class InstagramSiteGenerator:
             "posts": {},
             "stories": {},
             "cities": {},
+            "favorites": {"posts": {}, "stories": {}},
         }
+        if "favorites" not in tags:
+            tags["favorites"] = {"posts": {}, "stories": {}}
 
         # Group days into months for pagination (newest month first, which
         # the day list's ordering already guarantees)

@@ -126,14 +126,21 @@ def main():
         except (json.JSONDecodeError, OSError) as e:
             print(f"Error reading city tags file {city_tags_path}: {e}")
             return 1
+        raw_favorites = raw_tags.get("favorites", {}) or {}
         city_tags = {
             "version": raw_tags.get("version", 1),
             "posts": raw_tags.get("posts", {}) or {},
             "stories": raw_tags.get("stories", {}) or {},
             "cities": raw_tags.get("cities", {}) or {},
+            "favorites": {
+                "posts": raw_favorites.get("posts", {}) or {},
+                "stories": raw_favorites.get("stories", {}) or {},
+            },
         }
         print(f"Loaded city tags: {len(city_tags['posts'])} posts, "
-              f"{len(city_tags['stories'])} stories from {city_tags_path}")
+              f"{len(city_tags['stories'])} stories, "
+              f"{len(city_tags['favorites']['posts']) + len(city_tags['favorites']['stories'])} favorites "
+              f"from {city_tags_path}")
     elif args.city_tags:
         print(f"Error: --city-tags file not found: {args.city_tags}")
         return 1

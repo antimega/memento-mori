@@ -158,7 +158,7 @@ You can tag posts and stories with city names and get a cities page with a
 clickable index and a map:
 
 1. Open `edit.html` in your output folder (serve it locally, e.g. `python3 -m http.server -d output`)
-2. Type a city name in the editor panel, then click tiles to tag them — or use a day's "tag posts" / "tag stories" buttons to tag a whole day at once. Click again to untag.
+2. Type a city name in the editor panel, then click tiles to tag them — or use a day's "tag posts" / "tag stories" buttons to tag a whole day at once. Click again to untag. Switch the panel to ★ Favourite mode to mark favourites — favourited posts and stories appear first in their city's section on the cities page.
 3. Click **Export city_tags.json** and save the download as `output/city_tags.json`
 4. Regenerate the site (takes seconds, no archive needed):
 ```bash

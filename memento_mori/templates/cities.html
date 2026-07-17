@@ -94,6 +94,9 @@
             {% for post in city.posts %}
             <a class="grid-item timeline-tile" data-index="{{ post.index }}" data-timestamp="{{ post.timestamp }}" href="index.html?post={{ post.timestamp }}">
               <img src="{{ post.display_media }}" alt="Instagram post"{{ post.lazy_load }}>
+              {% if post.is_fav %}
+              <div class="fav-indicator">★</div>
+              {% endif %}
               {% if post.is_video %}
               <div class="video-indicator">▶ Video</div>
               {% endif %}
@@ -110,6 +113,9 @@
             {% for story in city.stories %}
             <a class="story-item timeline-story-tile" data-index="{{ story.index }}" data-timestamp="{{ story.timestamp }}" href="stories.html?story={{ story.timestamp }}">
               <img src="{{ story.media }}" alt="Instagram story"{{ story.lazy_load }} onerror="this.onerror=null; this.src='{{ story.original_media }}';">
+              {% if story.is_fav %}
+              <div class="fav-indicator">★</div>
+              {% endif %}
               {% if story.is_video %}
               <div class="video-indicator">▶</div>
               {% endif %}

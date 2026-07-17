@@ -15,6 +15,9 @@ document.addEventListener('DOMContentLoaded', function () {
     base.posts = base.posts || {};
     base.stories = base.stories || {};
     base.cities = base.cities || {};
+    base.favorites = base.favorites || {};
+    base.favorites.posts = base.favorites.posts || {};
+    base.favorites.stories = base.favorites.stories || {};
 
     var overlay;
     try {
@@ -24,6 +27,9 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     overlay.posts = overlay.posts || {};
     overlay.stories = overlay.stories || {};
+    overlay.favorites = overlay.favorites || {};
+    overlay.favorites.posts = overlay.favorites.posts || {};
+    overlay.favorites.stories = overlay.favorites.stories || {};
 
     var cityInput = document.getElementById('cityInput');
     var datalist = document.getElementById('cityNames');
@@ -39,6 +45,12 @@ document.addEventListener('DOMContentLoaded', function () {
             var baseVal = base[kind][ts] || null;
             if (overlay[kind][ts] === baseVal) {
                 delete overlay[kind][ts];
+            }
+        });
+        Object.keys(overlay.favorites[kind]).forEach(function (ts) {
+            var baseFav = base.favorites[kind][ts] ? true : null;
+            if (overlay.favorites[kind][ts] === baseFav) {
+                delete overlay.favorites[kind][ts];
             }
         });
     });
@@ -64,6 +76,43 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    function effectiveFav(kind, ts) {
+        if (Object.prototype.hasOwnProperty.call(overlay.favorites[kind], ts)) {
+            return !!overlay.favorites[kind][ts];
+        }
+        return !!base.favorites[kind][ts];
+    }
+
+    function setFav(kind, ts, fav) {
+        var baseFav = !!base.favorites[kind][ts];
+        if (fav === baseFav) {
+            delete overlay.favorites[kind][ts];
+        } else {
+            overlay.favorites[kind][ts] = fav ? true : null;
+        }
+    }
+
+    // ---- edit mode (tag city vs favourite) ----
+
+    var MODE_KEY = 'mm_editor_mode';
+    var mode = localStorage.getItem(MODE_KEY) === 'fav' ? 'fav' : 'tag';
+
+    function applyMode() {
+        document.body.classList.toggle('fav-mode', mode === 'fav');
+        cityInput.disabled = mode === 'fav';
+        document.querySelectorAll('input[name="editMode"]').forEach(function (radio) {
+            radio.checked = radio.value === mode;
+        });
+    }
+
+    document.querySelectorAll('input[name="editMode"]').forEach(function (radio) {
+        radio.addEventListener('change', function () {
+            mode = this.value;
+            localStorage.setItem(MODE_KEY, mode);
+            applyMode();
+        });
+    });
+
     function currentCity() {
         return cityInput.value.trim();
     }
@@ -79,7 +128,10 @@ document.addEventListener('DOMContentLoaded', function () {
     // ---- rendering ----
 
     function renderBadge(tile) {
-        var city = effective(tile.dataset.kind, tile.dataset.timestamp);
+        var kind = tile.dataset.kind;
+        var ts = tile.dataset.timestamp;
+
+        var city = effective(kind, ts);
         var badge = tile.querySelector('.city-badge');
         if (city) {
             if (!badge) {
@@ -92,6 +144,19 @@ document.addEventListener('DOMContentLoaded', function () {
         } else {
             if (badge) badge.remove();
             tile.classList.remove('tagged-current');
+        }
+
+        var fav = effectiveFav(kind, ts);
+        var favBadge = tile.querySelector('.fav-badge');
+        if (fav) {
+            if (!favBadge) {
+                favBadge = document.createElement('div');
+                favBadge.className = 'fav-badge';
+                favBadge.textContent = '★';
+                tile.appendChild(favBadge);
+            }
+        } else if (favBadge) {
+            favBadge.remove();
         }
     }
 
@@ -107,6 +172,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function renderCounts() {
         var tagged = { posts: 0, stories: 0 };
+        var favs = 0;
         ['posts', 'stories'].forEach(function (kind) {
             var seen = {};
             Object.keys(base[kind]).forEach(function (ts) { seen[ts] = true; });
@@ -114,9 +180,18 @@ document.addEventListener('DOMContentLoaded', function () {
             Object.keys(seen).forEach(function (ts) {
                 if (effective(kind, ts)) tagged[kind]++;
             });
+
+            var seenFav = {};
+            Object.keys(base.favorites[kind]).forEach(function (ts) { seenFav[ts] = true; });
+            Object.keys(overlay.favorites[kind]).forEach(function (ts) { seenFav[ts] = true; });
+            Object.keys(seenFav).forEach(function (ts) {
+                if (effectiveFav(kind, ts)) favs++;
+            });
         });
-        var pending = Object.keys(overlay.posts).length + Object.keys(overlay.stories).length;
+        var pending = Object.keys(overlay.posts).length + Object.keys(overlay.stories).length
+            + Object.keys(overlay.favorites.posts).length + Object.keys(overlay.favorites.stories).length;
         counts.textContent = tagged.posts + ' posts, ' + tagged.stories + ' stories tagged'
+            + ' · ' + favs + ' favourite' + (favs !== 1 ? 's' : '')
             + (pending ? ' · ' + pending + ' unexported change' + (pending !== 1 ? 's' : '') : '');
     }
 
@@ -147,6 +222,15 @@ document.addEventListener('DOMContentLoaded', function () {
     function toggleTile(tile) {
         var kind = tile.dataset.kind;
         var ts = tile.dataset.timestamp;
+
+        if (mode === 'fav') {
+            setFav(kind, ts, !effectiveFav(kind, ts));
+            persist();
+            renderBadge(tile);
+            renderCounts();
+            return;
+        }
+
         var city = currentCity();
         var current = effective(kind, ts);
 
@@ -181,6 +265,9 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     function tagDay(button) {
+        if (mode === 'fav') {
+            return;
+        }
         var city = currentCity();
         if (!city) {
             showWarning('Type a city name first');
@@ -213,7 +300,13 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     document.getElementById('exportTags').addEventListener('click', function () {
-        var merged = { version: 1, posts: {}, stories: {}, cities: base.cities || {} };
+        var merged = {
+            version: 1,
+            posts: {},
+            stories: {},
+            cities: base.cities || {},
+            favorites: { posts: {}, stories: {} }
+        };
         ['posts', 'stories'].forEach(function (kind) {
             var seen = {};
             Object.keys(base[kind]).forEach(function (ts) { seen[ts] = true; });
@@ -223,6 +316,15 @@ document.addEventListener('DOMContentLoaded', function () {
                 .forEach(function (ts) {
                     var city = effective(kind, ts);
                     if (city) merged[kind][ts] = city;
+                });
+
+            var seenFav = {};
+            Object.keys(base.favorites[kind]).forEach(function (ts) { seenFav[ts] = true; });
+            Object.keys(overlay.favorites[kind]).forEach(function (ts) { seenFav[ts] = true; });
+            Object.keys(seenFav)
+                .sort(function (a, b) { return Number(b) - Number(a); })
+                .forEach(function (ts) {
+                    if (effectiveFav(kind, ts)) merged.favorites[kind][ts] = true;
                 });
         });
 
@@ -240,7 +342,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!confirm('Discard all unexported tagging changes in this browser?')) {
             return;
         }
-        overlay = { posts: {}, stories: {} };
+        overlay = { posts: {}, stories: {}, favorites: { posts: {}, stories: {} } };
         persist();
         renderAll();
     });
@@ -296,5 +398,6 @@ document.addEventListener('DOMContentLoaded', function () {
         showMonth(localStorage.getItem(MONTH_KEY) || monthEls[0].dataset.month);
     }
 
+    applyMode();
     renderAll();
 });

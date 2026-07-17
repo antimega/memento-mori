@@ -1315,6 +1315,56 @@ a.timeline-story-tile {
   outline-offset: -3px;
 }
 
+/* Star sits top-left: video/multi indicators own the top-right corner
+   and city badges own the bottom-left */
+.fav-badge,
+.fav-indicator {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  font-size: 13px;
+  line-height: 1;
+  color: #ffd700;
+  background: rgba(0, 0, 0, 0.65);
+  padding: 3px 5px;
+  border-radius: 8px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.editor-mode {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+
+.editor-mode label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  color: #262626;
+  font-size: 13px;
+  margin-bottom: 0;
+  cursor: pointer;
+}
+
+body.fav-mode .tag-day-btn {
+  display: none;
+}
+
+body.fav-mode .editor-panel input[type="text"] {
+  opacity: 0.5;
+}
+
+body.fav-mode .editor-grid .timeline-tile,
+body.fav-mode .editor-grid .timeline-story-tile {
+  cursor: pointer;
+}
+
 .editor-month-nav {
   display: flex;
   align-items: center;
