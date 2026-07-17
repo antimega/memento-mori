@@ -124,13 +124,16 @@ main {
 
 .posts-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  /* minmax(0, 1fr): keep columns equal even when a nowrap place caption's
+     min-content width would otherwise inflate its track */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 28px;
 }
 
 .grid-item {
   position: relative;
   cursor: pointer;
+  min-width: 0;
 }
 
 /* The square image box inside a post tile; the place caption sits below */
@@ -543,7 +546,7 @@ main {
 
 @media (max-width: 768px) {
   .posts-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 4px;
   }
 
@@ -611,7 +614,7 @@ main {
 
 @media (max-width: 480px) {
   .posts-grid {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 3px;
   }
 
@@ -1193,6 +1196,16 @@ a.timeline-story-tile {
 .city-chip:hover {
   background: #fafafa;
   border-color: #8e8e8e;
+}
+
+.city-chip.active {
+  background: #262626;
+  border-color: #262626;
+  color: #fff;
+}
+
+.city-chip.active .city-chip-count {
+  color: #dbdbdb;
 }
 
 .city-chip-count {

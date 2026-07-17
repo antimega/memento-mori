@@ -687,11 +687,8 @@ class InstagramSiteGenerator:
         Generate cities.html: per-city sections of tagged posts/stories,
         a clickable city index, and a Leaflet map of city locations.
         """
-        # Most-recently-active city first, matching the site's
-        # reverse-chronological feel everywhere else
-        ordered = sorted(
-            self.cities.items(), key=lambda kv: kv[1]["newest"], reverse=True
-        )
+        # Alphabetical by city name
+        ordered = sorted(self.cities.items(), key=lambda kv: kv[0].casefold())
 
         seen_slugs = set()
         city_list = []

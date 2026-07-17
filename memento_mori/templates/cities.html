@@ -193,6 +193,75 @@
         });
       })();
 
+      // Show one city at a time; chips and map markers switch the city
+      (function () {
+        var sections = Array.prototype.slice.call(document.querySelectorAll('.city-section'));
+        if (!sections.length) return;
+        var chips = Array.prototype.slice.call(document.querySelectorAll('.city-chip'));
+
+        function slugOf(section) {
+          return section.id.replace(/^city-/, '');
+        }
+
+        function showCity(slug) {
+          var target = null;
+          sections.forEach(function (s) {
+            var match = slugOf(s) === slug;
+            s.hidden = !match;
+            if (match) target = s;
+          });
+          if (!target) {
+            target = sections[0];
+            target.hidden = false;
+            slug = slugOf(target);
+          }
+          chips.forEach(function (c) {
+            c.classList.toggle('active', c.getAttribute('href') === '#city-' + slug);
+          });
+          return slug;
+        }
+
+        // User selection: also record the city in the URL. The hash is only
+        // ever written here — writing it during initial load would trigger
+        // the browser's deferred fragment scroll and jump past the map.
+        function selectCity(slug) {
+          slug = showCity(slug);
+          if (history.replaceState) {
+            history.replaceState(null, '', '#city-' + slug);
+          }
+        }
+        window.mmShowCity = selectCity;
+
+        chips.forEach(function (chip) {
+          chip.addEventListener('click', function (e) {
+            e.preventDefault();
+            selectCity(chip.getAttribute('href').slice('#city-'.length));
+          });
+        });
+
+        // Follow manual URL hash edits / history navigation
+        window.addEventListener('hashchange', function () {
+          if (window.location.hash.indexOf('#city-') === 0) {
+            showCity(window.location.hash.slice('#city-'.length));
+          }
+        });
+
+        // Initial city: a ?post=/?story= deep link's city, then the URL
+        // hash, then London, then the first city
+        var initial = null;
+        var params = new URLSearchParams(window.location.search);
+        var target = params.get('post') || params.get('story');
+        if (target && /^\d+$/.test(target)) {
+          var tile = document.querySelector('.city-section [data-timestamp="' + target + '"]');
+          var section = tile && tile.closest('.city-section');
+          if (section) initial = slugOf(section);
+        }
+        if (!initial && window.location.hash.indexOf('#city-') === 0) {
+          initial = window.location.hash.slice('#city-'.length);
+        }
+        showCity(initial || 'london');
+      })();
+
       (function () {
         var markers = {{ city_markers_json|safe }};
         var mapEl = document.getElementById('cityMap');
@@ -214,9 +283,15 @@
           div.appendChild(document.createElement('br'));
           var a = document.createElement('a');
           a.href = '#city-' + c.slug;
-          a.textContent = 'Jump to section';
+          a.textContent = 'View city';
+          a.addEventListener('click', function (e) {
+            e.preventDefault();
+            if (window.mmShowCity) window.mmShowCity(c.slug);
+          });
           div.appendChild(a);
-          L.marker([c.lat, c.lng]).addTo(map).bindPopup(div);
+          L.marker([c.lat, c.lng]).addTo(map).bindPopup(div).on('click', function () {
+            if (window.mmShowCity) window.mmShowCity(c.slug);
+          });
           bounds.push([c.lat, c.lng]);
         });
         map.invalidateSize();
