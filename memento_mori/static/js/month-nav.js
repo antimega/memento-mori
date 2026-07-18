@@ -1,7 +1,8 @@
 // Month-by-month pagination, shared by the timeline and editor pages.
 // Expects: #monthNav (with optional data-store for the persistence key),
-// #monthSelect (options newest-first), #prevMonth / #nextMonth buttons,
-// and one [data-month] panel per month (all but the active one hidden).
+// #monthSelect (options newest-first), #olderMonth (←, back in time) and
+// #newerMonth (→, forward in time) buttons, and one [data-month] panel per
+// month (all but the active one hidden).
 document.addEventListener('DOMContentLoaded', function () {
     var nav = document.getElementById('monthNav');
     var monthSelect = document.getElementById('monthSelect');
@@ -31,7 +32,8 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function stepMonth(direction) {
-        // Options are ordered newest-first, matching the select
+        // Options are ordered newest-first: a higher index is older, so
+        // +1 goes back in time and -1 goes forward.
         var index = monthSelect.selectedIndex + direction;
         if (index >= 0 && index < monthSelect.options.length) {
             showMonth(monthSelect.options[index].value);
@@ -39,19 +41,20 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function updateMonthButtons() {
-        document.getElementById('prevMonth').disabled = monthSelect.selectedIndex <= 0;
-        document.getElementById('nextMonth').disabled =
+        // Older (←) is disabled at the oldest month; newer (→) at the newest
+        document.getElementById('olderMonth').disabled =
             monthSelect.selectedIndex >= monthSelect.options.length - 1;
+        document.getElementById('newerMonth').disabled = monthSelect.selectedIndex <= 0;
     }
 
     monthSelect.addEventListener('change', function () {
         showMonth(monthSelect.value);
     });
-    document.getElementById('prevMonth').addEventListener('click', function () {
-        stepMonth(-1);
+    document.getElementById('olderMonth').addEventListener('click', function () {
+        stepMonth(1);   // ← back in time
     });
-    document.getElementById('nextMonth').addEventListener('click', function () {
-        stepMonth(1);
+    document.getElementById('newerMonth').addEventListener('click', function () {
+        stepMonth(-1);  // → forward in time
     });
 
     // A ?post= / ?story= deep link should open on that item's month

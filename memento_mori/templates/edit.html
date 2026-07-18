@@ -48,13 +48,13 @@
       </div>
 
       <div class="month-nav" id="monthNav" data-store="mm_editor_month">
-        <button type="button" id="prevMonth" title="Newer month">←</button>
-        <select id="monthSelect">
+        <button type="button" id="olderMonth" title="Older month" aria-label="Older month">←</button>
+        <select id="monthSelect" aria-label="Select month">
           {% for month in months %}
           <option value="{{ month.key }}">{{ month.label }} ({{ month.item_count }})</option>
           {% endfor %}
         </select>
-        <button type="button" id="nextMonth" title="Older month">→</button>
+        <button type="button" id="newerMonth" title="Newer month" aria-label="Newer month">→</button>
       </div>
 
       <div class="timeline-container editor-grid" id="editorGrid">
