@@ -280,14 +280,15 @@ document.addEventListener('DOMContentLoaded', function () {
         if (mediaUrl.endsWith('.mp4') || mediaUrl.endsWith('.mov') ||
             mediaUrl.endsWith('.avi') || mediaUrl.endsWith('.webm')) {
 
-            // Create video element
+            // Create video element (no autoplay — the viewer presses play)
             const video = document.createElement('video');
             video.src = mediaUrl;
             video.controls = true;
-            video.autoplay = true;
+            video.autoplay = false;
             video.loop = true;
             video.muted = false;
             video.playsInline = true;
+            video.preload = 'metadata';
             video.alt = 'Instagram video post';
 
             return video;

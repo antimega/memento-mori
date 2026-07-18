@@ -208,7 +208,10 @@ main {
 
 .post-modal-content {
   display: flex;
-  max-width: 1200px;
+  /* Leave a gutter on each side so the between-post arrows (.modal-nav,
+     pinned to the viewport edges) never overlap the within-post carousel
+     arrows (.slideshow-nav, pinned to the image edges). */
+  max-width: min(1200px, 100% - 160px);
   margin: 30px auto;
   background-color: white;
   height: calc(100vh - 60px);
@@ -557,6 +560,7 @@ main {
     margin: 30px auto 0;
     border-radius: 0;
     width: 100%;
+    max-width: none;
   }
 
   .post-media {
