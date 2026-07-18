@@ -1,0 +1,23 @@
+    <!-- Modal for post details -->
+    <div class="post-modal" id="postModal" role="dialog" aria-modal="true" aria-label="Post" tabindex="-1">
+        <button type="button" class="close-modal icon-button" id="closeModal" aria-label="Close">✕</button>
+        <button type="button" class="modal-nav modal-prev icon-button" id="modalPrev" aria-label="Previous post">❮</button>
+        <button type="button" class="modal-nav modal-next icon-button" id="modalNext" aria-label="Next post">❯</button>
+        <div class="post-modal-content">
+            <div class="post-media" id="postMedia"></div>
+            <div class="post-info">
+                <div class="post-header">
+                    <div class="post-user" id="postUserPic">
+                        <img src="{{ profile_picture }}" alt="Profile" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">
+                    </div>
+                    <div class="post-user-info">
+                        <div class="post-username" id="postUsername">{{ username }}</div>
+                        <div class="post-place" id="postPlace"></div>
+                    </div>
+                </div>
+                <div class="post-caption" id="postCaption"></div>
+                <div class="post-stats" id="postStats"></div>
+                <div class="post-date" id="postDate"></div>
+            </div>
+        </div>
+    </div>

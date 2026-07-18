@@ -16,6 +16,44 @@ document.addEventListener('DOMContentLoaded', function() {
     let autoProgressTimer = null;
     let isNavigating = false;
     const autoProgressDelay = 10000; // 10 seconds
+    let storyOpen = false;           // Whether the viewer is open (focus trap)
+    let lastFocused = null;          // Element to restore focus to on close
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    // Hide the rest of the page from tab order + assistive tech while the
+    // viewer is open (it is a body-level sibling of these landmarks)
+    function setBackgroundInert(on) {
+        ['header', 'main', 'footer'].forEach(function (sel) {
+            const el = document.querySelector(sel);
+            if (!el) return;
+            if (on) {
+                el.setAttribute('inert', '');
+                el.setAttribute('aria-hidden', 'true');
+            } else {
+                el.removeAttribute('inert');
+                el.removeAttribute('aria-hidden');
+            }
+        });
+    }
+
+    // Keep Tab focus inside the open story viewer
+    function trapStoryFocus(e) {
+        if (!storyOpen || e.key !== 'Tab') return;
+        const focusable = Array.prototype.filter.call(
+            storyViewer.querySelectorAll('button, a[href], video, [tabindex]:not([tabindex="-1"])'),
+            el => el.offsetParent !== null
+        );
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+        }
+    }
     
     // Initialize story items from the grid
     const storyGridItems = document.querySelectorAll('.story-item');
@@ -36,16 +74,26 @@ document.addEventListener('DOMContentLoaded', function() {
         // Get all story items in their current order
         storyItems = Array.from(document.querySelectorAll('.story-item'));
         currentStoryIndex = storyItems.findIndex(item => parseInt(item.getAttribute('data-index')) === index);
-        
+
         if (currentStoryIndex === -1) return;
-        
+
+        // Remember what to restore focus to when the viewer closes
+        if (!storyOpen) {
+            lastFocused = document.activeElement;
+        }
+
         // Show the story viewer
         storyViewer.style.display = 'flex';
         document.body.style.overflow = 'hidden'; // Prevent scrolling
-        
+
         // Load the current story
         loadCurrentStory();
-        
+
+        // Viewer is now open: hide the background and move focus inside
+        storyOpen = true;
+        setBackgroundInert(true);
+        storyClose.focus();
+
         // Update URL with story info
         const timestamp = storyItems[currentStoryIndex].getAttribute('data-timestamp');
         if (timestamp) {
@@ -67,6 +115,8 @@ document.addEventListener('DOMContentLoaded', function() {
             isPaused = false;
             pauseIcon.style.display = 'block';
             playIcon.style.display = 'none';
+            storyPause.setAttribute('aria-label', 'Pause');
+            storyPause.setAttribute('aria-pressed', 'false');
         }
         
         // Reset progress bar
@@ -286,29 +336,30 @@ document.addEventListener('DOMContentLoaded', function() {
         // Get the current slide for animation
         const currentSlide = storyMedia.querySelector('.media-slide.active');
         
-        // Animate the current slide out
+        // Animate the current slide out (instant when reduced motion is on)
         if (currentSlide) {
-            currentSlide.style.transition = 'transform 0.5s ease';
+            const slideDur = reduceMotion ? '0s' : '0.5s';
+            currentSlide.style.transition = `transform ${slideDur} ease`;
             currentSlide.style.transform = `translateX(${direction < 0 ? '100%' : '-100%'})`;
-            
+
             // Create and prepare the new slide with initial position
             const newSlide = document.createElement('div');
             newSlide.className = 'media-slide';
             newSlide.style.transition = 'none'; // No transition initially
             newSlide.style.transform = `translateX(${direction > 0 ? '100%' : '-100%'})`; // Start from right or left
             newSlide.style.opacity = '1';
-            
+
             // Load the content into the new slide
             loadStoryContent(newSlide, newIndex);
             storyMedia.appendChild(newSlide);
-            
+
             // Force a reflow to ensure the initial transform is applied
             newSlide.offsetHeight;
-            
+
             // Now animate the slide into view
-            newSlide.style.transition = 'transform 0.5s ease';
+            newSlide.style.transition = `transform ${slideDur} ease`;
             newSlide.style.transform = 'translateX(0)';
-            
+
             // After animation completes, update to the new story
             setTimeout(() => {
                 currentStoryIndex = newIndex;
@@ -330,7 +381,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
                 // Reset navigation lock
                 isNavigating = false;
-            }, 500);
+            }, reduceMotion ? 0 : 500);
         } else {
             // If no current slide (shouldn't happen), just load the new story
             currentStoryIndex = newIndex;
@@ -362,11 +413,19 @@ document.addEventListener('DOMContentLoaded', function() {
         clearAutoProgressTimer();
         storyViewer.style.display = 'none';
         document.body.style.overflow = ''; // Restore scrolling
-        
+
+        // Viewer closed: restore the background and return focus to the trigger
+        storyOpen = false;
+        setBackgroundInert(false);
+
         // Remove story parameter from URL
         const url = new URL(window.location.href);
         url.searchParams.delete('story');
         window.history.pushState({}, '', url);
+
+        if (lastFocused && typeof lastFocused.focus === 'function') {
+            lastFocused.focus();
+        }
     }
     
     // Get pause button element
@@ -392,7 +451,9 @@ document.addEventListener('DOMContentLoaded', function() {
             // Show play icon when paused
             pauseIcon.style.display = 'none';
             playIcon.style.display = 'block';
-            
+            storyPause.setAttribute('aria-label', 'Play');
+            storyPause.setAttribute('aria-pressed', 'true');
+
             // Clear the timer and stop progress
             clearAutoProgressTimer();
             storyProgress.style.transition = 'none';
@@ -411,7 +472,9 @@ document.addEventListener('DOMContentLoaded', function() {
             // Show pause icon when playing
             pauseIcon.style.display = 'block';
             playIcon.style.display = 'none';
-            
+            storyPause.setAttribute('aria-label', 'Pause');
+            storyPause.setAttribute('aria-pressed', 'false');
+
             // Get the media element in the story viewer
             const videoElement = storyMedia.querySelector('video');
             const isVideo = videoElement !== null;
@@ -430,6 +493,10 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Keyboard navigation
     document.addEventListener('keydown', function(e) {
+        if (e.key === 'Tab') {
+            trapStoryFocus(e);
+            return;
+        }
         if (storyViewer.style.display !== 'none') {
             if (e.key === 'ArrowLeft') {
                 navigateStory(-1);

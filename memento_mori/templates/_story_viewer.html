@@ -1,0 +1,23 @@
+    <!-- Story Viewer -->
+    <div class="story-viewer" id="storyViewer" role="dialog" aria-modal="true" aria-label="Story" tabindex="-1">
+      <button type="button" class="story-close icon-button" id="storyClose" aria-label="Close">✕</button>
+      <button type="button" class="story-pause icon-button" id="storyPause" aria-label="Pause" aria-pressed="false">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" id="pauseIcon">
+          <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" fill="white"/>
+        </svg>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" id="playIcon" style="display:none;">
+          <path d="M8 5v14l11-7z" fill="white"/>
+        </svg>
+      </button>
+      <button type="button" class="story-nav story-prev icon-button" id="storyPrev" aria-label="Previous story">❮</button>
+      <button type="button" class="story-nav story-next icon-button" id="storyNext" aria-label="Next story">❯</button>
+      <div class="story-progress-container">
+        <div class="story-progress" id="storyProgress"></div>
+      </div>
+      <div class="story-content">
+        <div class="story-media-container" id="storyMedia"></div>
+        <div class="story-info-overlay">
+          <div class="story-date" id="storyDate"></div>
+        </div>
+      </div>
+    </div>

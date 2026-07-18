@@ -21,13 +21,14 @@
     <script src="js/modal.js"></script>
   </head>
   <body>
+    <a class="skip-link" href="#main">Skip to content</a>
     <header>
       <div class="header-content">
         <a href="https://github.com/greg-randall/memento-mori" class="logo">Memento Mori</a>
         <div class="date-range-header" id="date-range-header">{{ date_range }}</div>
       </div>
     </header>
-    <main>
+    <main id="main" tabindex="-1">
       <div class="profile-info">
         <div class="profile-picture">
           <img alt="Profile Picture" src="{{ profile_picture }}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">
@@ -42,7 +43,7 @@
           {% endif %}
           <div class="stats">
             <div class="stat">
-              <a href="index.html" class="nav-link active">
+              <a href="index.html" class="nav-link active" aria-current="page">
                 <span class="stat-count" id="post-count">{{ post_count }}</span> posts
               </a>
             </div>
@@ -75,12 +76,12 @@
       </div>
       <div class="sort-options">
         <div class="sort-row">
-          <a href="#" class="sort-link active" data-sort="newest">Newest</a>
-          <a href="#" class="sort-link" data-sort="oldest">Oldest</a>
-          <a href="#" class="sort-link" data-sort="most-likes">Most Likes</a>
-          <a href="#" class="sort-link" data-sort="most-comments">Most Comments</a>
-          <a href="#" class="sort-link" data-sort="most-views">Most Views</a>
-          <a href="#" class="sort-link" data-sort="random">Random</a>
+          <button type="button" class="sort-link active" data-sort="newest" aria-current="true">Newest</button>
+          <button type="button" class="sort-link" data-sort="oldest">Oldest</button>
+          <button type="button" class="sort-link" data-sort="most-likes">Most Likes</button>
+          <button type="button" class="sort-link" data-sort="most-comments">Most Comments</button>
+          <button type="button" class="sort-link" data-sort="most-views">Most Views</button>
+          <button type="button" class="sort-link" data-sort="random">Random</button>
         </div>
       </div>
       <div class="posts-grid" id="postsGrid">
@@ -88,29 +89,7 @@
       </div>
     </main>
 
-    <!-- Modal for post details -->
-    <div class="post-modal" id="postModal">
-        <div class="close-modal" id="closeModal">✕</div>
-        <div class="modal-nav modal-prev" id="modalPrev">❮</div>
-        <div class="modal-nav modal-next" id="modalNext">❯</div>
-        <div class="post-modal-content">
-            <div class="post-media" id="postMedia"></div>
-            <div class="post-info">
-                <div class="post-header">
-                    <div class="post-user" id="postUserPic">
-                        <img src="{{ profile_picture }}" alt="Profile" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">
-                    </div>
-                    <div class="post-user-info">
-                        <div class="post-username" id="postUsername">{{ username }}</div>
-                        <div class="post-place" id="postPlace"></div>
-                    </div>
-                </div>
-                <div class="post-caption" id="postCaption"></div>
-                <div class="post-stats" id="postStats"></div>
-                <div class="post-date" id="postDate"></div>
-            </div>
-        </div>
-    </div>
+    {% include "_post_modal.html" %}
     
     <footer>
       <div class="footer-content">

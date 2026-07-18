@@ -4,6 +4,8 @@
   --instagram-border: #dbdbdb;
   --instagram-text: #262626;
   --instagram-link: #0095f6;
+  /* Secondary text — 5.18:1 on #fff, 4.96:1 on #fafafa (both pass WCAG AA) */
+  --text-secondary: #6d6d6d;
   --header-height: 60px;
 }
 
@@ -11,6 +13,76 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+}
+
+/* Reset for icon controls rendered as <button>; the component classes
+   (.close-modal/.modal-nav/.slideshow-nav/.story-*) supply their own
+   background/size/position, so the visual is unchanged. */
+.icon-button {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* Accessibility utilities */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skip-link {
+  position: absolute;
+  left: 8px;
+  top: -60px;
+  z-index: 2000;
+  background: #fff;
+  color: var(--instagram-text);
+  padding: 8px 16px;
+  border-radius: 0 0 4px 4px;
+  text-decoration: none;
+}
+
+.skip-link:focus {
+  top: 0;
+}
+
+/* Visible keyboard focus (none existed before) */
+a:focus-visible,
+button:focus-visible,
+[tabindex]:focus-visible,
+.grid-item:focus-visible,
+.story-item:focus-visible,
+.sort-link:focus-visible,
+.city-chip:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 3px solid var(--instagram-link);
+  outline-offset: 2px;
+}
+
+/* White ring for controls that sit on the dark viewer overlays */
+.close-modal:focus-visible,
+.modal-nav:focus-visible,
+.slideshow-nav:focus-visible,
+.slideshow-dot:focus-visible,
+.story-close:focus-visible,
+.story-nav:focus-visible,
+.story-pause:focus-visible {
+  outline-color: #fff;
 }
 
 body {
@@ -51,7 +123,7 @@ header {
 }
 
 .date-range-header {
-  color: #8e8e8e;
+  color: var(--text-secondary);
   font-size: 14px;
   margin-left: 15px;
 }
@@ -79,7 +151,7 @@ main {
   align-items: center;
   justify-content: center;
   font-size: 36px;
-  color: #aaa;
+  color: var(--text-secondary);
 }
 
 .profile-details h1 {
@@ -157,7 +229,7 @@ main {
   padding: 3px 2px 0;
   font-size: 12px;
   line-height: 1.4;
-  color: #8e8e8e;
+  color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -262,7 +334,7 @@ main {
   justify-content: center;
   background-color: #eee;
   font-size: 14px;
-  color: #aaa;
+  color: var(--text-secondary);
 }
 
 .post-username {
@@ -276,7 +348,7 @@ main {
 
 .post-place {
   font-size: 12px;
-  color: #8e8e8e;
+  color: var(--text-secondary);
 }
 
 .share-button {
@@ -296,7 +368,7 @@ main {
 .share-button svg {
   width: 18px;
   height: 18px;
-  color: #8e8e8e;
+  color: var(--text-secondary);
 }
 
 .post-caption {
@@ -307,7 +379,7 @@ main {
 
 .post-date {
   padding: 16px;
-  color: #8e8e8e;
+  color: var(--text-secondary);
   font-size: 12px;
   border-top: 1px solid var(--instagram-border);
 }
@@ -526,6 +598,10 @@ main {
   padding: 5px 0;
   position: relative;
   transition: color 0.2s;
+  background: none;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
 }
 
 .sort-link:hover {
@@ -693,7 +769,7 @@ main {
 
 .story-date {
   font-size: 12px;
-  color: #8e8e8e;
+  color: var(--text-secondary);
   margin-bottom: 4px;
 }
 
@@ -725,7 +801,7 @@ main {
 .nav-link {
   margin-right: 20px;
   font-weight: 600;
-  color: #8e8e8e;
+  color: var(--text-secondary);
   text-decoration: none;
 }
 
@@ -1110,7 +1186,7 @@ main {
 
 .timeline-row-label {
   font-size: 12px;
-  color: #8e8e8e;
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin: 10px 0 6px;
@@ -1130,7 +1206,9 @@ main {
 
 /* Tiles are links; keep them looking like the grid tiles */
 a.timeline-tile,
-a.timeline-story-tile {
+a.timeline-story-tile,
+a.grid-item,
+a.story-item {
   display: block;
   text-decoration: none;
   color: inherit;
@@ -1199,7 +1277,7 @@ a.timeline-story-tile {
 
 .city-chip:hover {
   background: #fafafa;
-  border-color: #8e8e8e;
+  border-color: var(--text-secondary);
 }
 
 .city-chip.active {
@@ -1214,7 +1292,7 @@ a.timeline-story-tile {
 
 .city-chip-count {
   font-size: 12px;
-  color: #8e8e8e;
+  color: var(--text-secondary);
 }
 
 .city-section {
@@ -1244,7 +1322,7 @@ a.timeline-story-tile {
   display: block;
   font-size: 12px;
   font-weight: 600;
-  color: #8e8e8e;
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-bottom: 4px;
@@ -1261,7 +1339,7 @@ a.timeline-story-tile {
 
 .editor-counts {
   font-size: 12px;
-  color: #8e8e8e;
+  color: var(--text-secondary);
   margin-top: 8px;
   min-height: 15px;
 }
@@ -1318,7 +1396,7 @@ a.timeline-story-tile {
 
 .tag-day-btn:hover {
   background: #fafafa;
-  border-color: #8e8e8e;
+  border-color: var(--text-secondary);
 }
 
 .editor-grid .timeline-tile,
@@ -1425,7 +1503,7 @@ body.fav-mode .editor-grid .timeline-story-tile {
 
 .month-nav button:hover:not(:disabled) {
   background: #fafafa;
-  border-color: #8e8e8e;
+  border-color: var(--text-secondary);
 }
 
 .month-nav button:disabled {
@@ -1444,7 +1522,7 @@ body.fav-mode .editor-grid .timeline-story-tile {
 .editor-nav-link {
   padding: 8px 2px 10px;
   text-decoration: none;
-  color: #8e8e8e;
+  color: var(--text-secondary);
   font-size: 14px;
   font-weight: 600;
 }
@@ -1512,7 +1590,7 @@ body.fav-mode .editor-grid .timeline-story-tile {
 .city-card-meta {
   font-size: 12px;
   font-weight: 400;
-  color: #8e8e8e;
+  color: var(--text-secondary);
   margin-left: 8px;
 }
 
@@ -1578,7 +1656,7 @@ body.fav-mode .editor-grid .timeline-story-tile {
   margin: 0 0 10px;
   padding-left: 12px;
   border-left: 3px solid #dbdbdb;
-  color: #8e8e8e;
+  color: var(--text-secondary);
 }
 
 @media (max-width: 700px) {
@@ -1589,5 +1667,32 @@ body.fav-mode .editor-grid .timeline-story-tile {
     width: auto;
     margin: 15px 0;
     box-shadow: none;
+  }
+}
+
+/* Respect the user's reduced-motion preference. Targeted (not a blanket
+   transition:none) so the story auto-progress timing bar is preserved. */
+@media (prefers-reduced-motion: reduce) {
+  .grid-item img,
+  .grid-item video,
+  .timeline-story-tile img,
+  .story-item,
+  .city-chip,
+  .media-slide,
+  .modal-nav,
+  .slideshow-nav,
+  .slideshow-dot,
+  .sort-link,
+  .nav-link,
+  .share-button {
+    transition: none !important;
+  }
+
+  .grid-item:hover img,
+  .grid-item:hover video,
+  .timeline-story-tile:hover img,
+  .story-item:hover,
+  .city-chip:hover {
+    transform: none !important;
   }
 }

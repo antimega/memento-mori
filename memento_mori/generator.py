@@ -333,6 +333,7 @@ class InstagramSiteGenerator:
             grid_posts.append(
                 {
                     "index": post["i"],
+                    "timestamp": str(timestamp),
                     "display_media": display_media["url"],
                     "is_video": display_media["is_video"],
                     "media_count": len(post["m"]),

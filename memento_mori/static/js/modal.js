@@ -20,6 +20,43 @@ document.addEventListener('DOMContentLoaded', function () {
     let currentSlideIndex = 0;
     let postIndexToTimestamp = {}; // Map post index to timestamp
     let currentSortType = 'newest'; // Default sort
+    let modalOpen = false;          // Whether the dialog is open (for the focus trap)
+    let lastFocused = null;         // Element to restore focus to on close
+
+    // Hide the rest of the page from tab order + assistive tech while the
+    // dialog is open (the dialog is a body-level sibling of these landmarks)
+    function setBackgroundInert(on) {
+        ['header', 'main', 'footer'].forEach(function (sel) {
+            const el = document.querySelector(sel);
+            if (!el) return;
+            if (on) {
+                el.setAttribute('inert', '');
+                el.setAttribute('aria-hidden', 'true');
+            } else {
+                el.removeAttribute('inert');
+                el.removeAttribute('aria-hidden');
+            }
+        });
+    }
+
+    // Keep Tab focus inside the open modal
+    function trapModalFocus(e) {
+        if (!modalOpen || e.key !== 'Tab') return;
+        const focusable = Array.prototype.filter.call(
+            postModal.querySelectorAll('button, a[href], video, [tabindex]:not([tabindex="-1"])'),
+            el => el.offsetParent !== null
+        );
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+        }
+    }
 
     // Initialize by creating mapping and attaching listeners
     function initialize() {
@@ -42,9 +79,13 @@ document.addEventListener('DOMContentLoaded', function () {
             link.addEventListener('click', function (e) {
                 e.preventDefault();
 
-                // Update active class
-                sortLinks.forEach(l => l.classList.remove('active'));
+                // Update active state
+                sortLinks.forEach(l => {
+                    l.classList.remove('active');
+                    l.removeAttribute('aria-current');
+                });
                 this.classList.add('active');
+                this.setAttribute('aria-current', 'true');
 
                 // Get sort type and sort posts
                 const sortType = this.getAttribute('data-sort');
@@ -189,6 +230,12 @@ document.addEventListener('DOMContentLoaded', function () {
     function openModal(index, imageIndex = 0) {
         currentPostIndex = index;
 
+        // Remember what to restore focus to when the modal closes (only the
+        // opening trigger, not the prev/next buttons when navigating posts)
+        if (!modalOpen) {
+            lastFocused = document.activeElement;
+        }
+
         // Store the current scroll position before opening the modal
         const scrollPosition = window.pageYOffset || document.documentElement.scrollTop;
 
@@ -210,6 +257,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // Update URL with post ID and image index
         updateUrlWithPostInfo(timestamp, imageIndex);
+
+        // Dialog is now open: hide the background and move focus inside
+        modalOpen = true;
+        setBackgroundInert(true);
+        closeModalBtn.focus();
 
         // For mobile devices, ensure content is visible and properly sized
         if (window.innerWidth <= 768) {
@@ -346,16 +398,20 @@ document.addEventListener('DOMContentLoaded', function () {
             });
 
             // Add navigation buttons for slideshow
-            const prevBtn = document.createElement('div');
-            prevBtn.className = 'slideshow-nav slideshow-prev';
+            const prevBtn = document.createElement('button');
+            prevBtn.type = 'button';
+            prevBtn.className = 'slideshow-nav slideshow-prev icon-button';
+            prevBtn.setAttribute('aria-label', 'Previous photo');
             prevBtn.innerHTML = '❮';
             prevBtn.addEventListener('click', function (e) {
                 e.stopPropagation();
                 navigateSlideshow(-1);
             });
 
-            const nextBtn = document.createElement('div');
-            nextBtn.className = 'slideshow-nav slideshow-next';
+            const nextBtn = document.createElement('button');
+            nextBtn.type = 'button';
+            nextBtn.className = 'slideshow-nav slideshow-next icon-button';
+            nextBtn.setAttribute('aria-label', 'Next photo');
             nextBtn.innerHTML = '❯';
             nextBtn.addEventListener('click', function (e) {
                 e.stopPropagation();
@@ -367,9 +423,11 @@ document.addEventListener('DOMContentLoaded', function () {
             indicator.className = 'slideshow-indicator';
 
             for (let i = 0; i < post.m.length; i++) {
-                const dot = document.createElement('div');
-                dot.className = `slideshow-dot ${i === initialImageIndex ? 'active' : ''}`;
+                const dot = document.createElement('button');
+                dot.type = 'button';
+                dot.className = `slideshow-dot icon-button ${i === initialImageIndex ? 'active' : ''}`;
                 dot.setAttribute('data-index', i);
+                dot.setAttribute('aria-label', 'Go to photo ' + (i + 1));
                 dot.addEventListener('click', function (e) {
                     e.stopPropagation();
                     const index = parseInt(this.getAttribute('data-index'));
@@ -556,6 +614,10 @@ document.addEventListener('DOMContentLoaded', function () {
         postModal.style.display = 'none';
         document.body.style.overflow = 'auto'; // Re-enable scrolling
 
+        // Dialog closed: restore the background and return focus to the trigger
+        modalOpen = false;
+        setBackgroundInert(false);
+
         // Remove post and image parameters from URL
         const url = new URL(window.location.href);
         url.searchParams.delete('post');
@@ -568,6 +630,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 top: scrollPosition,
                 behavior: 'auto' // Use 'auto' instead of 'smooth' to prevent visible scrolling
             });
+            if (lastFocused && typeof lastFocused.focus === 'function') {
+                lastFocused.focus();
+            }
         }, 10);
     }
 
@@ -594,6 +659,8 @@ document.addEventListener('DOMContentLoaded', function () {
         if (postModal.style.display === 'block') {
             if (e.key === 'Escape') {
                 closeModal();
+            } else if (e.key === 'Tab') {
+                trapModalFocus(e);
             } else if (e.key === 'ArrowLeft') {
                 navigatePost(-1);
             } else if (e.key === 'ArrowRight') {

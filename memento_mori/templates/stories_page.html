@@ -98,13 +98,14 @@
     </style>
   </head>
   <body>
+    <a class="skip-link" href="#main">Skip to content</a>
     <header>
       <div class="header-content">
         <a href="https://github.com/greg-randall/memento-mori" class="logo">Memento Mori</a>
         <div class="date-range-header" id="date-range-header">{{ date_range }}</div>
       </div>
     </header>
-    <main>
+    <main id="main" tabindex="-1">
       <div class="profile-info">
         <div class="profile-picture">
           <img alt="Profile Picture" src="{{ profile_picture }}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">
@@ -124,7 +125,7 @@
               </a>
             </div>
             <div class="stat">
-              <a href="stories.html" class="nav-link active">
+              <a href="stories.html" class="nav-link active" aria-current="page">
                 <span class="stat-count" id="story-count">{{ story_count }}</span> stories
               </a>
             </div>
@@ -153,7 +154,7 @@
         <h2 class="section-title">Stories</h2>
         <div class="stories-grid">
           {% for story in stories %}
-          <div class="story-item" data-index="{{ story.index }}" data-timestamp="{{ story.timestamp }}">
+          <a class="story-item" data-index="{{ story.index }}" data-timestamp="{{ story.timestamp }}" href="stories.html?story={{ story.timestamp }}">
             <div class="story-media">
               {% if story.is_video %}
               <div class="video-indicator">
@@ -167,35 +168,13 @@
             <div class="story-info">
               <div class="story-date">{{ story.date }}</div>
             </div>
-          </div>
+          </a>
           {% endfor %}
         </div>
       </div>
     </main>
 
-    <!-- Story Viewer -->
-    <div class="story-viewer" id="storyViewer">
-      <div class="story-close" id="storyClose">✕</div>
-      <div class="story-pause" id="storyPause">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" id="pauseIcon">
-          <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" fill="white"/>
-        </svg>
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" id="playIcon" style="display:none;">
-          <path d="M8 5v14l11-7z" fill="white"/>
-        </svg>
-      </div>
-      <div class="story-nav story-prev" id="storyPrev">❮</div>
-      <div class="story-nav story-next" id="storyNext">❯</div>
-      <div class="story-progress-container">
-        <div class="story-progress" id="storyProgress"></div>
-      </div>
-      <div class="story-content">
-        <div class="story-media-container" id="storyMedia"></div>
-        <div class="story-info-overlay">
-          <div class="story-date" id="storyDate"></div>
-        </div>
-      </div>
-    </div>
+    {% include "_story_viewer.html" %}
     
     <footer>
       <div class="footer-content">
