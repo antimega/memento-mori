@@ -247,6 +247,17 @@ class InstagramSiteGenerator:
             key, val = _thumb_field(self._get_display_media(entry)["url"])
             if key:
                 entry[key] = val
+            # Poster (first-frame thumbnail) per video media item, so the modal
+            # shows a still instead of a blank box before playback. Keyed by
+            # media index; browser-only (never data.json), like th/dm.
+            posters = {}
+            for idx, media in enumerate(entry.get("m", [])):
+                if media and re.search(r"\.(mp4|mov|avi|webm)$", media, re.I):
+                    thumb = "thumbnails/" + hashlib.md5(media.encode()).hexdigest() + ".webp"
+                    if os.path.exists(os.path.join(self.output_dir, thumb)):
+                        posters[idx] = thumb
+            if posters:
+                entry["vp"] = posters
         for entry in stories.values():
             # story_thumb is a server-only field (no browser code reads it); its
             # resolved value is captured into th/dm below, so drop it from the

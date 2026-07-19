@@ -331,8 +331,13 @@ document.addEventListener('DOMContentLoaded', function () {
         // Update the browser history without reloading the page
         window.history.pushState({}, '', url);
     }
+    // Poster (first-frame thumbnail) for the video at media index i, if any.
+    function videoPoster(post, index) {
+        return (post && post.vp && post.vp[index]) || null;
+    }
+
     // Creates the appropriate media element (video or image) based on the file type
-    function createMediaElement(mediaUrl) {
+    function createMediaElement(mediaUrl, poster) {
         // Check if the media is a video based on file extension
         if (mediaUrl.endsWith('.mp4') || mediaUrl.endsWith('.mov') ||
             mediaUrl.endsWith('.avi') || mediaUrl.endsWith('.webm')) {
@@ -346,6 +351,8 @@ document.addEventListener('DOMContentLoaded', function () {
             video.muted = false;
             video.playsInline = true;
             video.preload = 'metadata';
+            // Show the first-frame still instead of a blank box until play.
+            if (poster) video.poster = poster;
             video.alt = 'Instagram video post';
 
             return video;
@@ -396,7 +403,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 slide.className = `media-slide ${index === initialImageIndex ? 'active' : ''}`;
 
                 // Create and add the appropriate media element
-                const mediaElement = createMediaElement(mediaUrl);
+                const mediaElement = createMediaElement(mediaUrl, videoPoster(post, index));
                 slide.appendChild(mediaElement);
 
                 mediaContainer.appendChild(slide);
@@ -453,7 +460,7 @@ document.addEventListener('DOMContentLoaded', function () {
             slide.className = 'media-slide active';
 
             // Create and add the appropriate media element
-            const mediaElement = createMediaElement(post.m[0]);  // Changed from media
+            const mediaElement = createMediaElement(post.m[0], videoPoster(post, 0));
             slide.appendChild(mediaElement);
 
             mediaContainer.appendChild(slide);
