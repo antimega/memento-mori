@@ -21,6 +21,8 @@ document.addEventListener('DOMContentLoaded', function () {
     let currentSortType = 'newest'; // Default sort
     let modalOpen = false;          // Whether the dialog is open (for the focus trap)
     let lastFocused = null;         // Element to restore focus to on close
+    let postMap = null;             // Lazily-created Leaflet map for the post location
+    let postMapMarker = null;
 
     // Hide the rest of the page from tab order + assistive tech while the
     // dialog is open (the dialog is a body-level sibling of these landmarks)
@@ -507,11 +509,56 @@ document.addEventListener('DOMContentLoaded', function () {
             postStats.appendChild(commentsDiv);
         }
 
+        // Small location map (only for posts that carry coordinates)
+        updatePostMap(post);
+
         // Set post date
         postDate.textContent = post.d;
 
         // Show/hide stats container based on whether there are any stats
         postStats.style.display = postStats.children.length > 0 ? 'flex' : 'none';
+    }
+
+    // Show a small Leaflet locator map for the post's coordinates (~73% of
+    // posts have them); hide the container for posts without coordinates.
+    // The map instance is created once and reused across posts.
+    function updatePostMap(post) {
+        const mapEl = document.getElementById('postMap');
+        if (!mapEl) return;
+
+        const la = parseFloat(post.la);
+        const lo = parseFloat(post.lo);
+        if (!isFinite(la) || !isFinite(lo) || typeof L === 'undefined') {
+            mapEl.style.display = 'none';
+            return;
+        }
+
+        mapEl.style.display = 'block';
+
+        if (!postMap) {
+            // scrollWheelZoom off so the page still scrolls over the map;
+            // fadeAnimation off avoids tiles stuck at opacity 0 (Leaflet gotcha).
+            postMap = L.map(mapEl, { scrollWheelZoom: false, fadeAnimation: false });
+            L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }).addTo(postMap);
+        }
+
+        const latlng = [la, lo];
+        postMap.setView(latlng, 14);
+        if (postMapMarker) {
+            postMapMarker.setLatLng(latlng);
+        } else {
+            postMapMarker = L.marker(latlng).addTo(postMap);
+        }
+
+        // The modal was just shown; let layout settle, then have Leaflet
+        // re-measure (else tiles render into a 0-size box).
+        setTimeout(function () {
+            postMap.invalidateSize();
+            postMap.setView(latlng, 14);
+        }, 60);
     }
 
     // Navigate between slides in a multi-media post

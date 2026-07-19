@@ -9,9 +9,9 @@ from pathlib import Path
 
 
 def _parse_coord(value):
-    """Parse a latitude/longitude value, rounded to ~1km precision."""
+    """Parse a latitude/longitude value, rounded to ~10m precision."""
     try:
-        coord = round(float(value), 2)
+        coord = round(float(value), 4)
     except (TypeError, ValueError):
         return None
     # 0.0 is EXIF junk (null island), not a real coordinate

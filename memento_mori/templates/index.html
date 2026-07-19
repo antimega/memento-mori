@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Memento Mori - {{ username }}'s Instagram Archive</title>
     <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
     {% if gtag_id %}
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id={{ gtag_id }}"></script>
@@ -20,6 +21,8 @@
          Deferred so the grid parses and paints without waiting on the data. -->
     <script src="js/posts-data.js" defer></script>
     <script src="js/modal.js" defer></script>
+    <!-- Leaflet powers the per-post location map in the modal; used on click, so deferred -->
+    <script src="vendor/leaflet/leaflet.js" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>

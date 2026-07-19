@@ -49,7 +49,8 @@ Stages (`memento_mori/`):
   format (`posts_1.json`) and the **new** format (`posts.json` with
   `label_values`, where the venue is keyed by `title: "Place"`, *not* `label`).
   Attaches place/lat/lon to a post when a location record is within ±1s of it;
-  coords are rounded to 2dp and `0.0` is rejected. Guards
+  coords are rounded to 4dp (~10m, in `_parse_coord`) and `0.0` is rejected.
+  Guards
   `if post_entry["t"]:` before `utcfromtimestamp` (new-format entries can lack
   a creation timestamp).
 - **`media.py`** — writes thumbnails as `thumbnails/<md5(source_path)>.webp`;
@@ -121,7 +122,8 @@ All pages: server-rendered semantic HTML, deferred data scripts, viewers opened
 by **index**, deep links via `?post=`/`?story=`, UTC date basis throughout.
 
 - **`index.html`** — posts grid. Server-renders **all** post tiles (via
-  `grid.html`). Loads `posts-data.js` + `modal.js` (deferred). Sort buttons
+  `grid.html`). Loads `posts-data.js` + `modal.js` + vendored Leaflet (all
+  deferred; Leaflet powers the modal's per-post location map). Sort buttons
   (Newest/Oldest/Popular/…) reorder tiles in place. Deep link `?post=TS[&image=N]`.
 
 - **`stories.html`** (from template `stories_page.html`) — stories grid.
@@ -132,8 +134,9 @@ by **index**, deep links via `?post=`/`?story=`, UTC date basis throughout.
 - **`timeline.html`** — the one structurally different page. **Only the newest
   month is server-rendered**; every other month's DOM is built **on demand,
   client-side**, from the already-loaded data. The `<select>` still lists all
-  months. Seven deferred head scripts, in order: `posts-data`, `stories-data`,
-  **`timeline-months`**, `modal`, `stories`, `month-nav`, `on-this-day`. Has a
+  months. Eight deferred head scripts, in order: `posts-data`, `stories-data`,
+  **`timeline-months`**, `modal`, `stories`, `month-nav`, `on-this-day`,
+  `leaflet` (for the modal map). Has a
   "Timeline ⇄ On this day" toggle. See §6 — this is the subsystem to understand
   before touching the timeline.
 
@@ -167,6 +170,10 @@ by **index**, deep links via `?post=`/`?story=`, UTC date basis throughout.
   stay until the user navigates; the progress bar and pause button are hidden
   via CSS. The pause/timer JS still exists in `stories.js` but is inert (its only
   trigger, the pause button, is hidden). Videos play once (`loop=false`).
+- **Post modal location map**: `modal.js`'s `updatePostMap` shows a small
+  Leaflet map (`#postMap`, above the date) for posts that carry `la`/`lo`
+  (~73%); the map instance is created once and reused across posts, hidden for
+  posts without coordinates. Tiles come from openstreetmap.org (network needed).
 
 ---
 
@@ -254,7 +261,9 @@ arrow keys, and click-to-advance still navigate; deep link `?story=` opens.
 
 **Cross-page.** Index sort + modal; cities map + one-city view + viewers +
 Markdown; editor tag/favourite/city-text round-trip + `mm_editor_month`
-persistence. Console clean on every page.
+persistence. The post modal shows a location map for posts with coordinates and
+hides it for those without (on cities, its map coexists with the city map).
+Console clean on every page.
 
 **Rendering parity after CSS/markup refactors.** Capture computed styles
 (a *golden master*) on all affected pages **before** the change, then diff after
@@ -282,7 +291,11 @@ verify each. Keep the viewport fixed between captures.
   defines its `window.*` hooks at top-level eval, so they exist before any DCL
   handler runs.
 - **`marked`/Leaflet on cities.html must NOT be deferred** — an inline body
-  script uses `marked` at parse time.
+  script uses `marked` at parse time. (Leaflet on index/timeline, by contrast,
+  is only used at click time by the modal map, so it *is* deferred there.)
+- **Map tiles are fetched from openstreetmap.org** (both the cities map and the
+  post-modal map) — they need network and won't render offline or over
+  `file://`. Everything else on the site works from a bare filesystem.
 - **Leaflet:** init after layout (`setTimeout`, not rAF — rAF never fires in a
   background tab); `fadeAnimation:false` (tiles stuck at opacity 0 otherwise);
   call `invalidateSize`. Its runtime `position:relative` inline style on the map
