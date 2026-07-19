@@ -125,39 +125,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 });
                 break;
 
-            case 'most-likes':
-                // Sort by number of likes
-                gridItems.sort((a, b) => {
-                    const indexA = parseInt(a.getAttribute('data-index'));
-                    const indexB = parseInt(b.getAttribute('data-index'));
-                    const likesA = getLikesByIndex(indexA) || 0;
-                    const likesB = getLikesByIndex(indexB) || 0;
-                    return likesB - likesA;
-                });
-                break;
-
-            case 'most-comments':
-                // Sort by number of comments
-                gridItems.sort((a, b) => {
-                    const indexA = parseInt(a.getAttribute('data-index'));
-                    const indexB = parseInt(b.getAttribute('data-index'));
-                    const commentsA = getCommentsByIndex(indexA) || 0;
-                    const commentsB = getCommentsByIndex(indexB) || 0;
-                    return commentsB - commentsA;
-                });
-                break;
-
-            case 'most-views':
-                // Sort by number of views/impressions
-                gridItems.sort((a, b) => {
-                    const indexA = parseInt(a.getAttribute('data-index'));
-                    const indexB = parseInt(b.getAttribute('data-index'));
-                    const viewsA = getViewsByIndex(indexA) || 0;
-                    const viewsB = getViewsByIndex(indexB) || 0;
-                    return viewsB - viewsA;
-                });
-                break;
-
             case 'random':
                 // Shuffle the grid items randomly
                 gridItems.sort(() => Math.random() - 0.5);
@@ -182,33 +149,6 @@ document.addEventListener('DOMContentLoaded', function () {
     function getTimestampByIndex(index) {
         const timestamp = postIndexToTimestamp[index];
         return parseInt(timestamp);
-    }
-
-    // Helper function to get likes by post index
-    function getLikesByIndex(index) {
-        const timestamp = postIndexToTimestamp[index];
-        if (timestamp && window.postData[timestamp]) {
-            return parseInt(window.postData[timestamp].l) || 0;
-        }
-        return 0;
-    }
-
-    // Helper function to get comments by post index
-    function getCommentsByIndex(index) {
-        const timestamp = postIndexToTimestamp[index];
-        if (timestamp && window.postData[timestamp]) {
-            return parseInt(window.postData[timestamp].c) || 0;
-        }
-        return 0;
-    }
-
-    // Helper function to get views/impressions by post index
-    function getViewsByIndex(index) {
-        const timestamp = postIndexToTimestamp[index];
-        if (timestamp && window.postData[timestamp]) {
-            return parseInt(window.postData[timestamp].im) || 0;
-        }
-        return 0;
     }
 
     // One delegated click listener covers every .grid-item tile (thousands
