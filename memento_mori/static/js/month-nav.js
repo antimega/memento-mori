@@ -1,8 +1,11 @@
 // Month-by-month pagination, shared by the timeline and editor pages.
-// Expects: #monthNav (with optional data-store for the persistence key),
-// #monthSelect (options newest-first), #olderMonth (←, back in time) and
-// #newerMonth (→, forward in time) buttons, and one [data-month] panel per
-// month (all but the active one hidden).
+// Expects: #monthNav, #monthSelect (options newest-first), #olderMonth (←,
+// back in time) and #newerMonth (→, forward in time) buttons, and one
+// [data-month] panel per month (all but the active one hidden).
+// If #monthNav has a data-store attribute, the selected month is persisted to
+// localStorage under that key and restored on load; without it the page
+// always opens on the newest month (unless a ?post=/?story= deep link points
+// elsewhere).
 document.addEventListener('DOMContentLoaded', function () {
     var nav = document.getElementById('monthNav');
     var monthSelect = document.getElementById('monthSelect');
@@ -11,7 +14,7 @@ document.addEventListener('DOMContentLoaded', function () {
         return;
     }
 
-    var storeKey = nav.dataset.store || 'mm_month';
+    var storeKey = nav.dataset.store || null;
 
     function showMonth(key) {
         var found = false;
@@ -26,7 +29,7 @@ document.addEventListener('DOMContentLoaded', function () {
             monthEls[0].hidden = false;
         }
         monthSelect.value = key;
-        localStorage.setItem(storeKey, key);
+        if (storeKey) localStorage.setItem(storeKey, key);
         updateMonthButtons();
         window.scrollTo({ top: 0 });
     }
@@ -67,5 +70,6 @@ document.addEventListener('DOMContentLoaded', function () {
         if (panel) initial = panel.dataset.month;
     }
 
-    showMonth(initial || localStorage.getItem(storeKey) || monthEls[0].dataset.month);
+    var stored = storeKey ? localStorage.getItem(storeKey) : null;
+    showMonth(initial || stored || monthEls[0].dataset.month);
 });
