@@ -210,6 +210,7 @@ document.addEventListener('DOMContentLoaded', function() {
             video.controls = true;
             video.autoplay = !isPaused; // Only autoplay if not paused
             video.muted = false;
+            video.loop = false;         // Play once; stories no longer auto-advance
             
             // Force the video to take the full size of its container
             video.style.width = '100%';
@@ -225,46 +226,10 @@ document.addEventListener('DOMContentLoaded', function() {
             videoWrapper.appendChild(video);
             
             slide.appendChild(videoWrapper);
-            
-            // Handle video events as in the original loadCurrentStory function
-            video.addEventListener('loadedmetadata', function() {
-                // Once we know the video duration, decide how to handle it
-                const videoLength = video.duration;
-                console.log(`Video duration: ${videoLength}s, Auto-progress delay: ${autoProgressDelay/1000}s`);
-                
-                // Clear any existing video timer first
-                if (video.videoTimer) {
-                    clearTimeout(video.videoTimer);
-                    video.videoTimer = null;
-                }
-                
-                if (videoLength > autoProgressDelay/1000) {
-                    // For longer videos, we'll let them play through once
-                    console.log('Video is longer than auto-progress delay, will play once');
-                    video.loop = false;
-                } else {
-                    // For shorter videos, loop until we reach the delay time
-                    console.log('Video is shorter than auto-progress delay, will loop');
-                    video.loop = true;
-                    
-                    // Set up a timer to move to next story after delay
-                    if (!isPaused) {
-                        video.videoTimer = setTimeout(() => {
-                            if (!isPaused && !isNavigating) {
-                                console.log(`Auto-progress timer completed after ${autoProgressDelay/1000}s`);
-                                navigateStory(1);
-                            }
-                        }, autoProgressDelay);
-                    }
-                }
-                
-                // Start progress bar animation
-                if (!isPaused) {
-                    storyProgress.style.transition = `width ${autoProgressDelay}ms linear`;
-                    storyProgress.style.width = '100%';
-                }
-            });
-            
+
+            // The video plays once and then stops; it never auto-advances to
+            // the next story. The viewer moves only on user navigation.
+
             // Store the video element in a variable accessible to the togglePause function
             currentVideoElement = video;
             
@@ -292,11 +257,8 @@ document.addEventListener('DOMContentLoaded', function() {
             
             img.alt = storyData.tt || 'Instagram Story';
             slide.appendChild(img);
-            
-            // Start auto-progress for images
-            if (!isPaused && !isNavigating) {
-                startAutoProgressTimer();
-            }
+            // Image stories no longer auto-advance; the viewer stays here until
+            // the user navigates (click / arrow keys / prev-next).
         }
         
         // Update navigation buttons visibility - always show both buttons for circular navigation

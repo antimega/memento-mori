@@ -1037,6 +1037,8 @@ main {
 }
 
 .story-progress-container {
+  /* Stories no longer auto-advance, so the countdown bar is hidden. */
+  display: none;
   position: absolute;
   top: 0;
   left: 0;
@@ -1161,6 +1163,8 @@ main {
 /* Story viewer pieces the stories page defines inline; needed here so the
    viewer embedded on the timeline page is styled too */
 .story-pause {
+  /* The pause control only governed auto-advance timing, which is now off. */
+  display: none;
   position: absolute;
   top: 20px;
   right: 70px;
@@ -1170,7 +1174,6 @@ main {
   z-index: 2001;
   width: 40px;
   height: 40px;
-  display: flex;
   align-items: center;
   justify-content: center;
   background-color: rgba(0, 0, 0, 0.5);
