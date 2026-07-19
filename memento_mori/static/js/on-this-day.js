@@ -3,9 +3,11 @@
 // it uses the browser's current date, so it stays correct without
 // regenerating the site.
 //
-// For load performance the matches are computed from the data files (cheap
-// key scan, no DOM traversal) and the view's DOM is only built on the first
-// toggle, by cloning the matching timeline tiles.
+// Matches are computed from the data files (cheap key scan, no DOM traversal)
+// and the view's DOM is built on the first toggle from the same data, via the
+// shared mmTiles builder — the matching timeline tiles are prior-year by
+// definition and (post month-on-demand rework) generally not in the DOM to
+// clone, so we build fresh rather than clone.
 document.addEventListener('DOMContentLoaded', function () {
     var container = document.getElementById('onThisDay');
     var btnTimeline = document.getElementById('viewTimeline');
@@ -53,39 +55,43 @@ document.addEventListener('DOMContentLoaded', function () {
         btnOnThisDay.textContent = 'On this day (' + total + ')';
     }
 
-    function cloneTile(ts, isStory) {
-        var orig = document.querySelector(
-            '.timeline-container [data-timestamp="' + ts + '"]'
-        );
-        if (!orig) return null;
-        var clone = orig.cloneNode(true);
+    function buildTile(ts, isStory) {
+        var data = isStory ? window.storiesData : window.postData;
+        var entry = data && data[ts];
+        if (!entry || !window.mmTiles) return null;
+        var tile = isStory ? window.mmTiles.story(ts, entry) : window.mmTiles.post(ts, entry);
         if (isStory) {
-            clone.classList.remove('story-item');       // keep viewers from binding
+            tile.classList.remove('story-item');         // keep viewers from binding
         } else {
-            clone.classList.remove('grid-item');
-            clone.classList.add('otd-tile');             // restyle without grid-item
+            tile.classList.remove('grid-item');
+            tile.classList.add('otd-tile');              // restyle without grid-item
         }
-        // Avoid a duplicate data-timestamp that would shadow the real tile
-        // in month-nav's deep-link lookup
-        clone.removeAttribute('data-timestamp');
-        clone.addEventListener('click', function (e) {
+        // Not the real tile: drop data-timestamp so it can't shadow the real
+        // one in month-nav's deep-link lookup, and handle clicks ourselves.
+        tile.removeAttribute('data-timestamp');
+        tile.addEventListener('click', function (e) {
             e.preventDefault();
-            var index = parseInt(clone.getAttribute('data-index'), 10);
+            var index = parseInt(tile.getAttribute('data-index'), 10);
+            // Build the item's real month first (hidden) so the in-place
+            // viewers can find the real tile: openStory live-queries
+            // .story-item and navigatePost walks .grid-item — both hit index
+            // -1 without it.
+            if (window.mmEnsureMonthFor) window.mmEnsureMonthFor(ts);
             if (isStory) {
                 if (window.mmOpenStory) window.mmOpenStory(index);
             } else {
                 if (window.mmOpenPost) window.mmOpenPost(index);
             }
         });
-        return clone;
+        return tile;
     }
 
     function buildRow(timestamps, rowClass, isStory) {
         var row = document.createElement('div');
         row.className = rowClass;
         timestamps.forEach(function (ts) {
-            var clone = cloneTile(ts, isStory);
-            if (clone) row.appendChild(clone);
+            var tile = buildTile(ts, isStory);
+            if (tile) row.appendChild(tile);
         });
         return row;
     }

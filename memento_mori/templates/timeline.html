@@ -21,6 +21,7 @@
          preserves execution order and runs before DOMContentLoaded. -->
     <script src="js/posts-data.js" defer></script>
     <script src="js/stories-data.js" defer></script>
+    <script src="js/timeline-months.js" defer></script>
     <script src="js/modal.js" defer></script>
     <script src="js/stories.js" defer></script>
     <script src="js/month-nav.js" defer></script>
@@ -97,10 +98,12 @@
       </div>
 
       <div class="timeline-container">
-        {% for month in months %}
-        {# The newest month renders visible so tiles paint during parse,
-           before any JS runs; month-nav.js keeps it as the default view #}
-        <div class="timeline-month" data-month="{{ month.key }}"{% if not loop.first %} hidden{% endif %}>
+        {# Only the newest month is server-rendered (it paints during parse,
+           before any JS); every other month is built on demand client-side by
+           timeline-months.js. The #monthSelect loop above still lists all
+           months. #}
+        {% for month in months[:1] %}
+        <div class="timeline-month" data-month="{{ month.key }}">
         {% for day in month.days %}
         <section class="timeline-day">
           <h2 class="timeline-day-header">{{ day.heading }}</h2>

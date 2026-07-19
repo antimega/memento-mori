@@ -27,6 +27,27 @@ def _escape_inline_json(data):
 # the JSON. Always kept: i, m, t, d, story_thumb (read directly by viewers).
 _OPTIONAL_ENTRY_FIELDS = ("pl", "tt", "im", "l", "c", "la", "lo")
 
+# A standard md5 thumbnail path, e.g. thumbnails/<32 hex>.webp
+_THUMB_URL_RE = re.compile(r"^thumbnails/([0-9a-f]{32})\.webp$")
+
+
+def _thumb_field(url):
+    """
+    Map a server-resolved tile display URL to the browser-only field the
+    client needs to rebuild that exact URL for months rendered on demand:
+      ("th", md5hex) when it's a standard md5 thumbnail (the common case),
+      ("dm", url)    for any other resolved URL (webp variant, video-scan
+                     thumbnail under a different name, SVG placeholder),
+      (None, None)   for an empty URL.
+    Kept out of data.json — this is display metadata for timeline-months.js.
+    """
+    if not url:
+        return None, None
+    m = _THUMB_URL_RE.match(url)
+    if m:
+        return "th", m.group(1)
+    return "dm", url
+
 
 def _compact_entries(entries):
     """
@@ -216,6 +237,30 @@ class InstagramSiteGenerator:
         """
         posts = _compact_entries(self.data_package.get("posts", {}) or {})
         stories = _compact_entries(self.data_package.get("stories", {}) or {})
+
+        # Enrich each entry with the thumbnail the browser needs to rebuild the
+        # tile image for on-demand timeline months, mirroring the same media
+        # resolution used by _post_tile_ctx / _story_tile_ctx. These are fresh
+        # compacted copies, so nothing leaks into the in-memory package or the
+        # data.json sidecar (which compacts separately).
+        for entry in posts.values():
+            key, val = _thumb_field(self._get_display_media(entry)["url"])
+            if key:
+                entry[key] = val
+        for entry in stories.values():
+            # story_thumb is a server-only field (no browser code reads it); its
+            # resolved value is captured into th/dm below, so drop it from the
+            # browser copy to avoid shipping the path twice. data.json keeps it.
+            story_thumb = entry.pop("story_thumb", None)
+            if story_thumb and os.path.exists(
+                os.path.join(self.output_dir, story_thumb)
+            ):
+                url = story_thumb
+            else:
+                url = self._get_display_media(entry)["url"]
+            key, val = _thumb_field(url)
+            if key:
+                entry[key] = val
 
         def _as_json_parse(data):
             # JSON.parse of a string literal parses roughly 2x faster than

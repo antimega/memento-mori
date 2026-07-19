@@ -1,33 +1,64 @@
 // Month-by-month pagination, shared by the timeline and editor pages.
 // Expects: #monthNav, #monthSelect (options newest-first), #olderMonth (←,
-// back in time) and #newerMonth (→, forward in time) buttons, and one
-// [data-month] panel per month (all but the active one hidden).
+// back in time) and #newerMonth (→, forward in time) buttons, and at least the
+// newest [data-month] panel present in the DOM.
+//
+// The timeline page server-renders only the newest month and builds the rest
+// on demand: when a requested month's panel is absent, this calls the
+// window.mmBuildMonth hook (from timeline-months.js) to materialise it. The
+// editor page has every month rendered and no such hook, so it behaves exactly
+// as before. showMonth() always re-queries the panels, so a panel built after
+// load is still found and hidden correctly.
+//
 // If #monthNav has a data-store attribute, the selected month is persisted to
-// localStorage under that key and restored on load; without it the page
-// always opens on the newest month (unless a ?post=/?story= deep link points
-// elsewhere).
+// localStorage under that key and restored on load; without it the page always
+// opens on the newest month (unless a ?post=/?story= deep link points elsewhere).
 document.addEventListener('DOMContentLoaded', function () {
     var nav = document.getElementById('monthNav');
     var monthSelect = document.getElementById('monthSelect');
-    var monthEls = document.querySelectorAll('[data-month]');
-    if (!nav || !monthSelect || !monthEls.length) {
+    if (!nav || !monthSelect || !monthSelect.options.length) {
+        return;
+    }
+    if (!document.querySelector('[data-month]')) {
         return;
     }
 
     var storeKey = nav.dataset.store || null;
 
-    function showMonth(key) {
-        var found = false;
-        monthEls.forEach(function (el) {
-            var match = el.dataset.month === key;
-            el.hidden = !match;
-            if (match) found = true;
-        });
-        if (!found) {
-            // Fall back to the newest month
-            key = monthEls[0].dataset.month;
-            monthEls[0].hidden = false;
+    function isSelectOption(key) {
+        for (var i = 0; i < monthSelect.options.length; i++) {
+            if (monthSelect.options[i].value === key) return true;
         }
+        return false;
+    }
+
+    // UTC month key ("YYYY-MM") for a timestamp — self-contained so this works
+    // on the editor page too, where timeline-months.js is not loaded.
+    function monthKeyFromTs(ts) {
+        var d = new Date(parseInt(ts, 10) * 1000);
+        var m = d.getUTCMonth() + 1;
+        return d.getUTCFullYear() + '-' + (m < 10 ? '0' + m : m);
+    }
+
+    function showMonth(key) {
+        // Ensure the target panel exists; build it on demand where supported.
+        var panel = document.querySelector('[data-month="' + key + '"]');
+        if (!panel && isSelectOption(key) && typeof window.mmBuildMonth === 'function') {
+            panel = window.mmBuildMonth(key);
+        }
+        if (!panel) {
+            // Unknown/absent month → fall back to the newest (first option),
+            // whose panel is always server-rendered.
+            key = monthSelect.options[0].value;
+            panel = document.querySelector('[data-month="' + key + '"]');
+        }
+
+        // Re-query every time: show only the target, hide the rest (including
+        // any panels built earlier). A stale NodeList would leave two visible.
+        document.querySelectorAll('[data-month]').forEach(function (el) {
+            el.hidden = el.dataset.month !== key;
+        });
+
         monthSelect.value = key;
         if (storeKey) localStorage.setItem(storeKey, key);
         updateMonthButtons();
@@ -60,16 +91,17 @@ document.addEventListener('DOMContentLoaded', function () {
         stepMonth(-1);  // → forward in time
     });
 
-    // A ?post= / ?story= deep link should open on that item's month
+    // A ?post= / ?story= deep link should open on that item's month. Resolve
+    // the month purely from the timestamp (no dependence on a pre-rendered
+    // tile), validated against the available months.
     var params = new URLSearchParams(window.location.search);
     var target = params.get('post') || params.get('story');
     var initial = null;
     if (target && /^\d+$/.test(target)) {
-        var tile = document.querySelector('[data-timestamp="' + target + '"]');
-        var panel = tile && tile.closest('[data-month]');
-        if (panel) initial = panel.dataset.month;
+        var key = monthKeyFromTs(target);
+        if (isSelectOption(key)) initial = key;
     }
 
     var stored = storeKey ? localStorage.getItem(storeKey) : null;
-    showMonth(initial || stored || monthEls[0].dataset.month);
+    showMonth(initial || stored || monthSelect.options[0].value);
 });

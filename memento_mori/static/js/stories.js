@@ -525,18 +525,25 @@ document.addEventListener('DOMContentLoaded', function() {
     function checkUrlForStory() {
         const urlParams = new URLSearchParams(window.location.search);
         const storyTimestamp = urlParams.get('story');
-        
-        if (storyTimestamp) {
-            // Find the story item with this timestamp
+        if (!storyTimestamp) return;
+
+        // Resolve the index straight from the data first: on the timeline page
+        // the deep-linked story may live in a month that isn't rendered yet
+        // (built lazily), so the tile lookup below would miss it. month-nav's
+        // DCL handler builds+shows that month synchronously, so by the time
+        // this 100ms timer fires openStory's live .story-item query succeeds.
+        let storyIndex = -1;
+        if (window.storiesData && window.storiesData[storyTimestamp]) {
+            storyIndex = window.storiesData[storyTimestamp].i;
+        } else {
             const storyItem = Array.from(storyGridItems).find(
                 item => item.getAttribute('data-timestamp') === storyTimestamp
             );
-            
-            if (storyItem) {
-                const storyIndex = parseInt(storyItem.getAttribute('data-index'));
-                // Slight delay to ensure DOM is fully loaded
-                setTimeout(() => openStory(storyIndex), 100);
-            }
+            if (storyItem) storyIndex = parseInt(storyItem.getAttribute('data-index'));
+        }
+
+        if (storyIndex !== -1 && storyIndex !== undefined) {
+            setTimeout(() => openStory(storyIndex), 100);
         }
     }
     
