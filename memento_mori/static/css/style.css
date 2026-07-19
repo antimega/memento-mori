@@ -15,6 +15,12 @@
   box-sizing: border-box;
 }
 
+/* Ensure the hidden attribute always wins, even on elements with an explicit
+   display (e.g. .month-nav is display:flex) */
+[hidden] {
+  display: none !important;
+}
+
 /* Reset for icon controls rendered as <button>; the component classes
    (.close-modal/.modal-nav/.slideshow-nav/.story-*) supply their own
    background/size/position, so the visual is unchanged. */
@@ -208,15 +214,20 @@ main {
   min-width: 0;
 }
 
-/* The square image box inside a post tile; the place caption sits below */
-.grid-item .tile-media {
+/* The square image box inside a post tile; the place caption sits below.
+   .otd-tile is the cloned post tile in the "On this day" view (it drops the
+   .grid-item class so the viewers don't bind to it). */
+.grid-item .tile-media,
+.otd-tile .tile-media {
   position: relative;
   aspect-ratio: 1/1;
   overflow: hidden;
 }
 
 .grid-item img,
-.grid-item video {
+.grid-item video,
+.otd-tile img,
+.otd-tile video {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -236,7 +247,9 @@ main {
 }
 
 .grid-item:hover img,
-.grid-item:hover video {
+.grid-item:hover video,
+.otd-tile:hover img,
+.otd-tile:hover video {
   transform: scale(1.05);
 }
 
@@ -1529,6 +1542,61 @@ body.fav-mode .editor-grid .timeline-story-tile {
   cursor: default;
 }
 
+/* Timeline / "On this day" view toggle */
+.timeline-views {
+  display: flex;
+  gap: 8px;
+  margin: 20px 0 10px;
+}
+
+.view-toggle {
+  padding: 8px 16px;
+  border: 1px solid #dbdbdb;
+  border-radius: 18px;
+  background: #fff;
+  color: var(--instagram-text);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.view-toggle:hover:not(.active) {
+  background: #fafafa;
+  border-color: var(--text-secondary);
+}
+
+.view-toggle.active {
+  background: #262626;
+  border-color: #262626;
+  color: #fff;
+}
+
+/* "On this day" content */
+.on-this-day {
+  margin-top: 10px;
+}
+
+.otd-year {
+  margin-bottom: 40px;
+}
+
+.otd-year-header {
+  font-size: 18px;
+  font-weight: 600;
+  color: #262626;
+  margin: 0 0 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #dbdbdb;
+}
+
+.otd-empty {
+  color: var(--text-secondary);
+  margin-top: 20px;
+}
+
 /* Editor page navigation */
 .editor-nav {
   display: flex;
@@ -1693,6 +1761,8 @@ body.fav-mode .editor-grid .timeline-story-tile {
 @media (prefers-reduced-motion: reduce) {
   .grid-item img,
   .grid-item video,
+  .otd-tile img,
+  .otd-tile video,
   .timeline-story-tile img,
   .story-item,
   .city-chip,
@@ -1708,6 +1778,8 @@ body.fav-mode .editor-grid .timeline-story-tile {
 
   .grid-item:hover img,
   .grid-item:hover video,
+  .otd-tile:hover img,
+  .otd-tile:hover video,
   .timeline-story-tile:hover img,
   .story-item:hover,
   .city-chip:hover {

@@ -435,6 +435,10 @@ document.addEventListener('DOMContentLoaded', function() {
     let isPaused = false;
     let currentVideoElement = null; // Track the current video element
     
+    // Expose an open-by-index hook so other views (e.g. "On this day") can
+    // open the story viewer in place; it locates the real tile by data-index.
+    window.mmOpenStory = openStory;
+
     // Event listeners
     storyClose.addEventListener('click', closeStory);
     storyPrev.addEventListener('click', () => navigateStory(-1));

@@ -636,6 +636,10 @@ document.addEventListener('DOMContentLoaded', function () {
         }, 10);
     }
 
+    // Expose an open-by-index hook so other views (e.g. "On this day") can
+    // open the modal in place without duplicating the tile-click plumbing.
+    window.mmOpenPost = openModal;
+
     // Event listeners for modal navigation
     closeModalBtn.addEventListener('click', closeModal);
     modalPrev.addEventListener('click', function (e) {

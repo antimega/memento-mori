@@ -22,6 +22,7 @@
     <script src="js/modal.js"></script>
     <script src="js/stories.js"></script>
     <script src="js/month-nav.js"></script>
+    <script src="js/on-this-day.js"></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -78,6 +79,11 @@
         </div>
       </div>
 
+      <div class="timeline-views" role="group" aria-label="Timeline view">
+        <button type="button" id="viewTimeline" class="view-toggle active" aria-pressed="true">Timeline</button>
+        <button type="button" id="viewOnThisDay" class="view-toggle" aria-pressed="false">On this day</button>
+      </div>
+
       <div class="month-nav" id="monthNav" data-store="mm_timeline_month">
         <button type="button" id="olderMonth" title="Older month" aria-label="Older month">←</button>
         <select id="monthSelect" aria-label="Select month">
@@ -131,6 +137,8 @@
         </div>
         {% endfor %}
       </div>
+
+      <div id="onThisDay" class="on-this-day" hidden></div>
     </main>
 
     {% include "_post_modal.html" %}
