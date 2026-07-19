@@ -36,7 +36,7 @@
     <main id="main" tabindex="-1">
       <div class="profile-info">
         <div class="profile-picture">
-          <img alt="Profile Picture" src="{{ profile_picture }}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">
+          <img alt="Profile Picture" src="{{ profile_picture }}">
         </div>
         <div class="profile-details">
           <h1 id="username">{{ username }}</h1>
@@ -79,7 +79,7 @@
       </div>
 
       <div class="cities-container">
-        <div id="cityMap" class="city-map" style="height: 400px;" role="application" aria-label="Map of tagged cities"></div>
+        <div id="cityMap" class="city-map" role="application" aria-label="Map of tagged cities"></div>
 
         <nav class="city-index" aria-label="Cities">
           {% for city in cities %}
