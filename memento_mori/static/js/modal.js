@@ -12,7 +12,6 @@ document.addEventListener('DOMContentLoaded', function () {
     const postDate = document.getElementById('postDate');
     const postPlace = document.getElementById('postPlace');
     const postUsername = document.getElementById('postUsername');
-    const postUserPic = document.getElementById('postUserPic');
     const sortLinks = document.querySelectorAll('.sort-link');
 
     // Global variables to track current post and indexes

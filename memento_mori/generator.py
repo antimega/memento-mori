@@ -327,16 +327,6 @@ class InstagramSiteGenerator:
         date_range = self.data_package["date_range"]["range"]
         post_count = self.data_package["post_count"]
         story_count = self.data_package.get("story_count", 0)
-        
-        # Get profile picture path and check for WebP version
-        profile_picture = profile_info["profile_picture"]
-        
-        # Check if we have a WebP version of the profile picture
-        if profile_picture:
-            webp_path = re.sub(r"\.(jpg|jpeg|png|gif)$", ".webp", profile_picture, flags=re.I)
-            if os.path.exists(os.path.join(self.output_dir, webp_path)):
-                profile_picture = webp_path
-
         # Current date for footer
         generation_date = datetime.datetime.now().strftime("%Y-%m-%d")
 
@@ -345,7 +335,6 @@ class InstagramSiteGenerator:
         template = self.jinja_env.get_template("index.html")
         html_content = template.render(
             username=profile_info["username"],
-            profile_picture=profile_picture,
             bio=profile_info.get("bio", ""),  # Pass bio to template
             profile=profile_info,  # Pass the entire profile object
             date_range=date_range,
@@ -484,16 +473,6 @@ class InstagramSiteGenerator:
         date_range = self.data_package["date_range"]["range"]
         story_count = len(stories_data)
         post_count = self.data_package["post_count"]
-        
-        # Get profile picture path and check for WebP version
-        profile_picture = profile_info["profile_picture"]
-        
-        # Check if we have a WebP version of the profile picture
-        if profile_picture:
-            webp_path = re.sub(r"\.(jpg|jpeg|png|gif)$", ".webp", profile_picture, flags=re.I)
-            if os.path.exists(os.path.join(self.output_dir, webp_path)):
-                profile_picture = webp_path
-
         # Current date for footer
         generation_date = datetime.datetime.now().strftime("%Y-%m-%d")
         
@@ -531,7 +510,6 @@ class InstagramSiteGenerator:
         template = self.jinja_env.get_template("stories_page.html")
         html_content = template.render(
             username=profile_info["username"],
-            profile_picture=profile_picture,
             bio=profile_info.get("bio", ""),
             profile=profile_info,
             date_range=date_range,
@@ -646,19 +624,10 @@ class InstagramSiteGenerator:
     def _page_context(self):
         """Template context shared by every page's header/nav."""
         profile_info = self.data_package["profile"]
-
-        # Get profile picture path and check for WebP version
-        profile_picture = profile_info["profile_picture"]
-        if profile_picture:
-            webp_path = re.sub(r"\.(jpg|jpeg|png|gif)$", ".webp", profile_picture, flags=re.I)
-            if os.path.exists(os.path.join(self.output_dir, webp_path)):
-                profile_picture = webp_path
-
         story_count = self.data_package.get("story_count", 0)
         cities = getattr(self, "cities", {}) or {}
         return {
             "username": profile_info["username"],
-            "profile_picture": profile_picture,
             "bio": profile_info.get("bio", ""),
             "profile": profile_info,
             "date_range": self.data_package["date_range"]["range"],
