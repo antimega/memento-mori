@@ -210,19 +210,23 @@ document.addEventListener('DOMContentLoaded', function () {
         return 0;
     }
 
-    // Attach click event listeners to all grid items
+    // One delegated click listener covers every .grid-item tile (thousands
+    // on the larger pages) — much cheaper than binding each tile, and
+    // reordering/sorting tiles needs no rebinding.
+    let gridListenerBound = false;
     function attachGridItemListeners() {
-        const gridItems = document.querySelectorAll('.grid-item');
-        gridItems.forEach(item => {
-            item.addEventListener('click', function (e) {
-                // On the timeline page tiles are links (no-JS fallback);
-                // open the modal in place instead of navigating away
-                if (this.tagName === 'A') {
-                    e.preventDefault();
-                }
-                const postIndex = parseInt(this.getAttribute('data-index'));
-                openModal(postIndex);
-            });
+        if (gridListenerBound) return;
+        gridListenerBound = true;
+        document.addEventListener('click', function (e) {
+            const item = e.target.closest('.grid-item');
+            if (!item) return;
+            // On the timeline page tiles are links (no-JS fallback);
+            // open the modal in place instead of navigating away
+            if (item.tagName === 'A') {
+                e.preventDefault();
+            }
+            const postIndex = parseInt(item.getAttribute('data-index'));
+            openModal(postIndex);
         });
     }
 
@@ -462,8 +466,12 @@ document.addEventListener('DOMContentLoaded', function () {
             postPlace.style.display = post.pl ? 'block' : 'none';
         }
 
-        // Set post caption
+        // Set post caption (encoding fixed lazily on first open, memoized)
         if (post.tt) {
+            if (!post.ttFixed) {
+                post.tt = fixEncodingIssues(post.tt);
+                post.ttFixed = true;
+            }
             postCaption.innerHTML = post.tt.replace(/\n/g, '<br>');
         } else {
             postCaption.innerHTML = '';
@@ -762,20 +770,6 @@ function fixEncodingIssues(text) {
     return fixedText;
   }
     
-  // Apply the fix to all post captions when the page loads
-  document.addEventListener('DOMContentLoaded', function() {
-    // Fix the JSON data directly
-    for (const timestamp in window.postData) {
-      const post = window.postData[timestamp];
-      if (post.tt) {  // Changed from title
-        post.tt = fixEncodingIssues(post.tt);  // Changed from title
-      }
-    }
-    
-    // Update any already rendered content
-    const captions = document.querySelectorAll('.post-caption');
-    captions.forEach(caption => {
-      caption.textContent = fixEncodingIssues(caption.textContent);
-    });
-  });
+  // Captions are fixed lazily (and memoized) when a post is opened — see
+  // updateModalContent — instead of an eager pass over every post at load.
   

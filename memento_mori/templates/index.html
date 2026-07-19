@@ -16,9 +16,10 @@
       gtag('config', '{{ gtag_id }}');
     </script>
     {% endif %}
-    <!-- Post data for the modal (shared file, loaded once and cached) -->
-    <script src="js/posts-data.js"></script>
-    <script src="js/modal.js"></script>
+    <!-- Post data for the modal (shared file, loaded once and cached).
+         Deferred so the grid parses and paints without waiting on the data. -->
+    <script src="js/posts-data.js" defer></script>
+    <script src="js/modal.js" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>

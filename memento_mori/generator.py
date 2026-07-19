@@ -217,11 +217,18 @@ class InstagramSiteGenerator:
         posts = _compact_entries(self.data_package.get("posts", {}) or {})
         stories = _compact_entries(self.data_package.get("stories", {}) or {})
 
+        def _as_json_parse(data):
+            # JSON.parse of a string literal parses roughly 2x faster than
+            # evaluating a multi-MB JS object literal. Double json.dumps
+            # turns the JSON payload into a valid JS string literal.
+            payload = json.dumps(json.dumps(data, ensure_ascii=False))
+            return "JSON.parse(" + payload.replace("</", "<\\/") + ")"
+
         js_dir = self.output_dir / "js"
         with open(js_dir / "posts-data.js", "w", encoding="utf-8") as f:
-            f.write("window.postData = " + json.dumps(posts, ensure_ascii=False) + ";\n")
+            f.write("window.postData = " + _as_json_parse(posts) + ";\n")
         with open(js_dir / "stories-data.js", "w", encoding="utf-8") as f:
-            f.write("window.storiesData = " + json.dumps(stories, ensure_ascii=False) + ";\n")
+            f.write("window.storiesData = " + _as_json_parse(stories) + ";\n")
 
         # Remove the old combined file if regenerating a pre-split site
         stale = js_dir / "timeline-data.js"

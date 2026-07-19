@@ -55,18 +55,19 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // Initialize story items from the grid
+    // One delegated click listener covers every .story-item tile (thousands
+    // on the larger pages) — much cheaper than binding each tile.
     const storyGridItems = document.querySelectorAll('.story-item');
-    storyGridItems.forEach(item => {
-        item.addEventListener('click', function(e) {
-            // On the timeline page tiles are links (no-JS fallback);
-            // open the story viewer in place instead of navigating away
-            if (this.tagName === 'A') {
-                e.preventDefault();
-            }
-            const storyIndex = parseInt(this.getAttribute('data-index'));
-            openStory(storyIndex);
-        });
+    document.addEventListener('click', function(e) {
+        const item = e.target.closest('.story-item');
+        if (!item) return;
+        // On the timeline page tiles are links (no-JS fallback);
+        // open the story viewer in place instead of navigating away
+        if (item.tagName === 'A') {
+            e.preventDefault();
+        }
+        const storyIndex = parseInt(item.getAttribute('data-index'));
+        openStory(storyIndex);
     });
     
     // Open a story by index

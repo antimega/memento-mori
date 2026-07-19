@@ -16,10 +16,11 @@
       gtag('config', '{{ gtag_id }}');
     </script>
     {% endif %}
-    <!-- Stories data (shared file, loaded once and cached) -->
-    <script src="js/stories-data.js"></script>
+    <!-- Stories data (shared file, loaded once and cached).
+         Deferred so the grid parses and paints without waiting on the data. -->
+    <script src="js/stories-data.js" defer></script>
     <!-- Load stories.js only, modal.js is not needed on this page -->
-    <script src="js/stories.js"></script>
+    <script src="js/stories.js" defer></script>
     <style>
       /* Make videos full height in story viewer */
       .story-media-container video {

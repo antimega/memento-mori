@@ -1,8 +1,11 @@
 // "On this day" view for the timeline page: posts and stories from today's
 // calendar day (month + day) in previous years. Fully client-side and live —
 // it uses the browser's current date, so it stays correct without
-// regenerating the site. Matching tiles are cloned from the (always-rendered)
-// timeline DOM and open the real in-place viewers via the exposed hooks.
+// regenerating the site.
+//
+// For load performance the matches are computed from the data files (cheap
+// key scan, no DOM traversal) and the view's DOM is only built on the first
+// toggle, by cloning the matching timeline tiles.
 document.addEventListener('DOMContentLoaded', function () {
     var container = document.getElementById('onThisDay');
     var btnTimeline = document.getElementById('viewTimeline');
@@ -19,67 +22,87 @@ document.addEventListener('DOMContentLoaded', function () {
     var todayDay = today.getUTCDate();
     var todayYear = today.getUTCFullYear();
 
-    function tileDate(tile) {
-        var d = new Date(parseInt(tile.getAttribute('data-timestamp'), 10) * 1000);
-        return { month: d.getUTCMonth(), day: d.getUTCDate(), year: d.getUTCFullYear() };
-    }
-
-    // Bucket matching tiles by year (previous years only)
+    // Bucket matching timestamps by year (previous years only), straight
+    // from the loaded data — no DOM work at load time
     var byYear = {};
-    [
-        { sel: '.timeline-tile', story: false },
-        { sel: '.timeline-story-tile', story: true }
-    ].forEach(function (kind) {
-        document.querySelectorAll('.timeline-container ' + kind.sel).forEach(function (tile) {
-            var d = tileDate(tile);
-            if (d.month !== todayMonth || d.day !== todayDay || d.year >= todayYear) {
-                return;
-            }
-            var bucket = byYear[d.year] || (byYear[d.year] = { posts: [], stories: [] });
-            (kind.story ? bucket.stories : bucket.posts).push(tile);
+    var total = 0;
+
+    function scan(data, isStory) {
+        if (!data) return;
+        Object.keys(data).forEach(function (ts) {
+            var d = new Date(parseInt(ts, 10) * 1000);
+            if (d.getUTCMonth() !== todayMonth || d.getUTCDate() !== todayDay) return;
+            var year = d.getUTCFullYear();
+            if (year >= todayYear) return;
+            var bucket = byYear[year] || (byYear[year] = { posts: [], stories: [] });
+            (isStory ? bucket.stories : bucket.posts).push(ts);
+            total++;
         });
-    });
+    }
+    scan(window.postData, false);
+    scan(window.storiesData, true);
 
     var years = Object.keys(byYear).map(Number).sort(function (a, b) { return b - a; });
-    var total = years.reduce(function (n, y) {
-        return n + byYear[y].posts.length + byYear[y].stories.length;
-    }, 0);
+    years.forEach(function (year) {
+        // Newest-first within a year, matching the timeline's ordering
+        var newestFirst = function (a, b) { return parseInt(b, 10) - parseInt(a, 10); };
+        byYear[year].posts.sort(newestFirst);
+        byYear[year].stories.sort(newestFirst);
+    });
+    if (total) {
+        btnOnThisDay.textContent = 'On this day (' + total + ')';
+    }
 
-    function buildRow(tiles, rowClass, isStory) {
+    function cloneTile(ts, isStory) {
+        var orig = document.querySelector(
+            '.timeline-container [data-timestamp="' + ts + '"]'
+        );
+        if (!orig) return null;
+        var clone = orig.cloneNode(true);
+        if (isStory) {
+            clone.classList.remove('story-item');       // keep viewers from binding
+        } else {
+            clone.classList.remove('grid-item');
+            clone.classList.add('otd-tile');             // restyle without grid-item
+        }
+        // Avoid a duplicate data-timestamp that would shadow the real tile
+        // in month-nav's deep-link lookup
+        clone.removeAttribute('data-timestamp');
+        clone.addEventListener('click', function (e) {
+            e.preventDefault();
+            var index = parseInt(clone.getAttribute('data-index'), 10);
+            if (isStory) {
+                if (window.mmOpenStory) window.mmOpenStory(index);
+            } else {
+                if (window.mmOpenPost) window.mmOpenPost(index);
+            }
+        });
+        return clone;
+    }
+
+    function buildRow(timestamps, rowClass, isStory) {
         var row = document.createElement('div');
         row.className = rowClass;
-        tiles.forEach(function (orig) {
-            var clone = orig.cloneNode(true);
-            if (isStory) {
-                clone.classList.remove('story-item');       // keep viewers from binding
-            } else {
-                clone.classList.remove('grid-item');
-                clone.classList.add('otd-tile');             // restyle without grid-item
-            }
-            // Avoid a duplicate data-timestamp that would shadow the real tile
-            // in month-nav's deep-link lookup
-            clone.removeAttribute('data-timestamp');
-            clone.addEventListener('click', function (e) {
-                e.preventDefault();
-                var index = parseInt(clone.getAttribute('data-index'), 10);
-                if (isStory) {
-                    if (window.mmOpenStory) window.mmOpenStory(index);
-                } else {
-                    if (window.mmOpenPost) window.mmOpenPost(index);
-                }
-            });
-            row.appendChild(clone);
+        timestamps.forEach(function (ts) {
+            var clone = cloneTile(ts, isStory);
+            if (clone) row.appendChild(clone);
         });
         return row;
     }
 
-    // Build the section eagerly, kept hidden until toggled
-    if (!total) {
-        var empty = document.createElement('p');
-        empty.className = 'otd-empty';
-        empty.textContent = 'Nothing from previous years on this day. Check back tomorrow.';
-        container.appendChild(empty);
-    } else {
+    var built = false;
+    function buildView() {
+        if (built) return;
+        built = true;
+
+        if (!total) {
+            var empty = document.createElement('p');
+            empty.className = 'otd-empty';
+            empty.textContent = 'Nothing from previous years on this day. Check back tomorrow.';
+            container.appendChild(empty);
+            return;
+        }
+
         years.forEach(function (year) {
             var ago = todayYear - year;
             var section = document.createElement('section');
@@ -98,11 +121,11 @@ document.addEventListener('DOMContentLoaded', function () {
             }
             container.appendChild(section);
         });
-        btnOnThisDay.textContent = 'On this day (' + total + ')';
     }
 
     // View toggle
     function showView(onThisDay) {
+        if (onThisDay) buildView();
         container.hidden = !onThisDay;
         if (monthNav) monthNav.hidden = onThisDay;
         if (timeline) timeline.hidden = onThisDay;

@@ -16,13 +16,15 @@
       gtag('config', '{{ gtag_id }}');
     </script>
     {% endif %}
-    <!-- Post and story data for the in-page viewers -->
-    <script src="js/posts-data.js"></script>
-    <script src="js/stories-data.js"></script>
-    <script src="js/modal.js"></script>
-    <script src="js/stories.js"></script>
-    <script src="js/month-nav.js"></script>
-    <script src="js/on-this-day.js"></script>
+    <!-- Post and story data for the in-page viewers. All deferred so the
+         body parses and paints without waiting on ~3MB of data JS; defer
+         preserves execution order and runs before DOMContentLoaded. -->
+    <script src="js/posts-data.js" defer></script>
+    <script src="js/stories-data.js" defer></script>
+    <script src="js/modal.js" defer></script>
+    <script src="js/stories.js" defer></script>
+    <script src="js/month-nav.js" defer></script>
+    <script src="js/on-this-day.js" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -96,7 +98,9 @@
 
       <div class="timeline-container">
         {% for month in months %}
-        <div class="timeline-month" data-month="{{ month.key }}" hidden>
+        {# The newest month renders visible so tiles paint during parse,
+           before any JS runs; month-nav.js keeps it as the default view #}
+        <div class="timeline-month" data-month="{{ month.key }}"{% if not loop.first %} hidden{% endif %}>
         {% for day in month.days %}
         <section class="timeline-day">
           <h2 class="timeline-day-header">{{ day.heading }}</h2>
