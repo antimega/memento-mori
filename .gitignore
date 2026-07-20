@@ -8,6 +8,7 @@
 # Builds and Downloads
 output/
 instagram*/
+flickr*/
 
 # Virtual Environments
 venv/
