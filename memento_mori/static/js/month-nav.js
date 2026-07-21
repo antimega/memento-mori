@@ -91,15 +91,23 @@ document.addEventListener('DOMContentLoaded', function () {
         stepMonth(-1);  // → forward in time
     });
 
-    // A ?post= / ?story= deep link should open on that item's month. Resolve
-    // the month purely from the timestamp (no dependence on a pre-rendered
-    // tile), validated against the available months.
+    // A ?post= / ?story= / ?photo= deep link should open on that item's
+    // month. Pages whose items aren't timestamp-keyed (flickr) expose a
+    // mmMonthKeyOfTarget hook; otherwise resolve purely from the timestamp.
+    // Both are validated against the available months.
     var params = new URLSearchParams(window.location.search);
-    var target = params.get('post') || params.get('story');
+    var target = params.get('post') || params.get('story') || params.get('photo');
     var initial = null;
-    if (target && /^\d+$/.test(target)) {
-        var key = monthKeyFromTs(target);
-        if (isSelectOption(key)) initial = key;
+    if (target) {
+        var key = null;
+        if (typeof window.mmMonthKeyOfTarget === 'function') {
+            key = window.mmMonthKeyOfTarget(target);
+        }
+        // Hook miss (or no hook): ?post=/?story= targets are timestamps
+        if (!key && /^\d+$/.test(target)) {
+            key = monthKeyFromTs(target);
+        }
+        if (key && isSelectOption(key)) initial = key;
     }
 
     var stored = storeKey ? localStorage.getItem(storeKey) : null;

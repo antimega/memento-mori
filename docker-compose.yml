@@ -9,6 +9,17 @@ services:
     volumes:
       - ./:/app/workspace
       - ./output:/output
+      # External disk holding the Flickr export zips; mounted at the same
+      # absolute path so host symlinks in flickr-download/ resolve inside
+      # the container too. Read-only — the importer only reads zips.
+      - /Volumes/WDBackup/flickr-backup-july2026:/Volumes/WDBackup/flickr-backup-july2026:ro
+      # The originals-cache lives on the external disk too (symlinked from
+      # flickr-download/originals-cache); writable — extraction lands here.
+      - /Volumes/WDBackup/memento-flickr-cache:/Volumes/WDBackup/memento-flickr-cache
     environment:
       - PYTHONUNBUFFERED=1
+      # Flickr API key for the one-time metadata sweep (optional; only needed
+      # when importing a Flickr export). Set it in the host environment:
+      #   FLICKR_API_KEY=... docker compose run --rm memento-mori --regenerate --flickr ./flickr-download
+      - FLICKR_API_KEY=${FLICKR_API_KEY:-}
     command: --search-dir . --output ./output

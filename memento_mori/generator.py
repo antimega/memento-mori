@@ -23,6 +23,14 @@ def _escape_inline_json(data):
     return json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
 
 
+def _as_json_parse(data):
+    # JSON.parse of a string literal parses roughly 2x faster than
+    # evaluating a multi-MB JS object literal. Double json.dumps turns the
+    # JSON payload into a valid JS string literal.
+    payload = json.dumps(json.dumps(data, ensure_ascii=False))
+    return "JSON.parse(" + payload.replace("</", "<\\/") + ")"
+
+
 # Optional entry fields dropped from serialized output when empty, to shrink
 # the JSON. Always kept: i, m, t, d, story_thumb (read directly by viewers).
 _OPTIONAL_ENTRY_FIELDS = ("pl", "tt", "im", "l", "c", "la", "lo")
@@ -184,6 +192,11 @@ class InstagramSiteGenerator:
             if self.data_package.get("posts") or self.data_package.get("stories"):
                 self._generate_timeline_html()
 
+            # Generate the Flickr section when an import is present
+            if (self.data_package.get("flickr") or {}).get("items"):
+                self._write_flickr_browser_data()
+                self._generate_flickr_html()
+
             # Generate the cities page when anything is tagged
             if self.cities:
                 self._generate_cities_html()
@@ -273,13 +286,6 @@ class InstagramSiteGenerator:
             if key:
                 entry[key] = val
 
-        def _as_json_parse(data):
-            # JSON.parse of a string literal parses roughly 2x faster than
-            # evaluating a multi-MB JS object literal. Double json.dumps
-            # turns the JSON payload into a valid JS string literal.
-            payload = json.dumps(json.dumps(data, ensure_ascii=False))
-            return "JSON.parse(" + payload.replace("</", "<\\/") + ")"
-
         js_dir = self.output_dir / "js"
         with open(js_dir / "posts-data.js", "w", encoding="utf-8") as f:
             f.write("window.postData = " + _as_json_parse(posts) + ";\n")
@@ -355,6 +361,8 @@ class InstagramSiteGenerator:
             day_count=self._timeline_day_count(),
             has_cities=bool(self.cities),
             city_count=len(self.cities),
+            has_flickr=self._page_context()["has_flickr"],
+            flickr_count=self._page_context()["flickr_count"],
             grid_html=grid_html,
             generation_date=generation_date,
             gtag_id=self.gtag_id,  # Add Google tag ID
@@ -529,6 +537,8 @@ class InstagramSiteGenerator:
             day_count=self._timeline_day_count(),
             has_cities=bool(self.cities),
             city_count=len(self.cities),
+            has_flickr=self._page_context()["has_flickr"],
+            flickr_count=self._page_context()["flickr_count"],
             stories=stories_list,
             generation_date=generation_date,
             gtag_id=self.gtag_id,
@@ -546,12 +556,20 @@ class InstagramSiteGenerator:
         return datetime.datetime.utcfromtimestamp(int(timestamp_key)).date()
 
     def _timeline_day_count(self):
-        """Number of distinct calendar days that have a post or story."""
+        """Number of distinct calendar days with a post, story, or Flickr
+        item (all three appear on the timeline)."""
         posts = self.data_package.get("posts", {}) or {}
         stories = self.data_package.get("stories", {}) or {}
-        return len(
-            {self._day_of(k) for k in posts} | {self._day_of(k) for k in stories}
-        )
+        flickr = (self.data_package.get("flickr") or {}).get("items") or {}
+        days = {self._day_of(k) for k in posts} | {
+            self._day_of(k) for k in stories
+        }
+        days |= {
+            datetime.datetime.utcfromtimestamp(e["t"]).date()
+            for e in flickr.values()
+            if e.get("m")
+        }
+        return len(days)
 
     def _post_tile_ctx(self, timestamp, post):
         """Template context for one post tile (shared by timeline/cities/editor)."""
@@ -589,25 +607,44 @@ class InstagramSiteGenerator:
             "lazy_load": Markup(' loading="lazy"'),
         }
 
-    def _build_day_list(self):
+    def _build_day_list(self, include_flickr=False):
         """
-        Group all posts and stories by calendar day, newest day first.
-        Both source dicts are already sorted newest-first, so per-day order
-        falls out of encounter order. The first ~30 tiles load eagerly.
+        Group all posts and stories (and, for the timeline, Flickr items) by
+        calendar day, newest day first. Source dicts are already sorted
+        newest-first, so per-day order falls out of encounter order. The
+        first ~30 tiles load eagerly. The editor keeps include_flickr=False
+        (it only tags Instagram content).
         """
         posts_data = self.data_package.get("posts", {}) or {}
         stories_data = self.data_package.get("stories", {}) or {}
 
+        def _bucket(day):
+            return days.setdefault(
+                day, {"posts": [], "stories": [], "flickr": []}
+            )
+
         days = {}
         for timestamp, post in posts_data.items():
-            days.setdefault(self._day_of(timestamp), {"posts": [], "stories": []})[
-                "posts"
-            ].append(self._post_tile_ctx(timestamp, post))
+            _bucket(self._day_of(timestamp))["posts"].append(
+                self._post_tile_ctx(timestamp, post)
+            )
 
         for timestamp, story in stories_data.items():
-            days.setdefault(self._day_of(timestamp), {"posts": [], "stories": []})[
-                "stories"
-            ].append(self._story_tile_ctx(timestamp, story))
+            _bucket(self._day_of(timestamp))["stories"].append(
+                self._story_tile_ctx(timestamp, story)
+            )
+
+        if include_flickr:
+            flickr = (self.data_package.get("flickr") or {}).get("items") or {}
+            for pid, entry in sorted(
+                flickr.items(), key=lambda kv: kv[1]["i"]
+            ):
+                if not entry.get("m"):
+                    continue
+                day = datetime.datetime.utcfromtimestamp(entry["t"]).date()
+                _bucket(day)["flickr"].append(
+                    self._flickr_tile_ctx(pid, entry)
+                )
 
         lazy_after = 30
         tile_counter = 0
@@ -615,7 +652,7 @@ class InstagramSiteGenerator:
 
         for day in sorted(days.keys(), reverse=True):
             bucket = days[day]
-            for tile in bucket["posts"] + bucket["stories"]:
+            for tile in bucket["posts"] + bucket["stories"] + bucket["flickr"]:
                 if tile_counter < lazy_after:
                     tile["lazy_load"] = ""
                 tile_counter += 1
@@ -626,8 +663,10 @@ class InstagramSiteGenerator:
                     "month_label": day.strftime("%B %Y"),
                     "posts": bucket["posts"],
                     "stories": bucket["stories"],
+                    "flickr": bucket["flickr"],
                     "post_count": len(bucket["posts"]),
                     "story_count": len(bucket["stories"]),
+                    "flickr_count": len(bucket["flickr"]),
                 }
             )
         return day_list
@@ -637,6 +676,7 @@ class InstagramSiteGenerator:
         profile_info = self.data_package["profile"]
         story_count = self.data_package.get("story_count", 0)
         cities = getattr(self, "cities", {}) or {}
+        flickr_items = (self.data_package.get("flickr") or {}).get("items") or {}
         return {
             "username": profile_info["username"],
             "bio": profile_info.get("bio", ""),
@@ -648,16 +688,18 @@ class InstagramSiteGenerator:
             "day_count": self._timeline_day_count(),
             "has_cities": bool(cities),
             "city_count": len(cities),
+            "has_flickr": bool(flickr_items),
+            "flickr_count": len(flickr_items),
             "generation_date": datetime.datetime.now().strftime("%Y-%m-%d"),
             "gtag_id": self.gtag_id,
         }
 
-    def _build_month_list(self):
+    def _build_month_list(self, include_flickr=False):
         """
         Group the day list into months (newest first) for paginated pages.
         """
         months = []
-        for day in self._build_day_list():
+        for day in self._build_day_list(include_flickr=include_flickr):
             if not months or months[-1]["key"] != day["month_key"]:
                 months.append(
                     {
@@ -668,7 +710,9 @@ class InstagramSiteGenerator:
                     }
                 )
             months[-1]["days"].append(day)
-            months[-1]["item_count"] += day["post_count"] + day["story_count"]
+            months[-1]["item_count"] += (
+                day["post_count"] + day["story_count"] + day["flickr_count"]
+            )
         return months
 
     def _generate_timeline_html(self):
@@ -677,10 +721,9 @@ class InstagramSiteGenerator:
         day, newest day first, posts and stories in separate rows per day,
         paginated month by month.
         """
-        # The timeline hosts both viewers, which read window.postData /
-        # window.storiesData from the shared js/posts-data.js + stories-data.js
-        # (written by _write_browser_data).
-        months = self._build_month_list()
+        # The timeline hosts all three viewers, which read window.postData /
+        # window.storiesData / window.flickrData from the shared data scripts.
+        months = self._build_month_list(include_flickr=True)
 
         template = self.jinja_env.get_template("timeline.html")
         html_content = template.render(months=months, **self._page_context())
@@ -689,6 +732,115 @@ class InstagramSiteGenerator:
             f.write(_minify_html(html_content))
 
         print(f"Generated timeline HTML file: {self.output_dir / 'timeline.html'}")
+
+    # -- Flickr section ----------------------------------------------------
+    # Flickr entries are keyed by photo id (NOT timestamp — 46 public items
+    # share a date_taken second) and rendered on their own page, separate
+    # from the Instagram posts/stories.
+
+    def _flickr_photopage(self, pid):
+        alias = (self.data_package.get("flickr") or {}).get("meta", {}).get(
+            "path_alias", ""
+        )
+        return f"https://www.flickr.com/photos/{alias}/{pid}/"
+
+    def _flickr_tile_ctx(self, pid, entry):
+        """Template context for one flickr tile (parity: mmFlickrTile in
+        static/js/flickr-months.js — change both together)."""
+        m0 = entry.get("m", [None])[0]
+        thumb = ""
+        if m0:
+            thumb_name = hashlib.md5(m0.encode()).hexdigest() + ".webp"
+            thumb_path = f"thumbnails/{thumb_name}"
+            thumb = (
+                thumb_path
+                if os.path.exists(os.path.join(self.output_dir, thumb_path))
+                else m0
+            )
+        return {
+            "id": pid,
+            "display_media": thumb,
+            "is_video": bool(entry.get("vd")),
+            "title": entry.get("tt", ""),
+            "photopage": self._flickr_photopage(pid),
+            "lazy_load": Markup(' loading="lazy"'),
+        }
+
+    def _generate_flickr_html(self):
+        """
+        Generate flickr.html: an index.html-style grid of every item. Only
+        the first chunk is server-rendered (30,335 tiles would be a ~7 MB
+        page); flickr-grid.js appends the rest progressively from
+        window.flickrData as the user scrolls, and handles sorting.
+        """
+        items = (self.data_package.get("flickr") or {}).get("items") or {}
+        eager = 30       # load immediately, like index.html
+        server_chunk = 60  # server-rendered so the grid paints during parse
+
+        first_tiles = []
+        skipped = 0
+        for pid, entry in sorted(items.items(), key=lambda kv: kv[1]["i"]):
+            if not entry.get("m"):
+                skipped += 1
+                continue
+            if len(first_tiles) >= server_chunk:
+                break
+            tile = self._flickr_tile_ctx(pid, entry)
+            if len(first_tiles) < eager:
+                tile["lazy_load"] = ""
+            first_tiles.append(tile)
+        if skipped:
+            print(f"Flickr page: {skipped} items have no media yet; not shown")
+
+        template = self.jinja_env.get_template("flickr.html")
+        html_content = template.render(
+            flickr_tiles=first_tiles,
+            **self._page_context(),
+        )
+        with open(self.output_dir / "flickr.html", "w", encoding="utf-8") as f:
+            f.write(_minify_html(html_content))
+        print(f"Generated flickr HTML file: {self.output_dir / 'flickr.html'}")
+
+    def _write_flickr_browser_data(self):
+        """
+        Write js/flickr-data.js: window.flickrData / flickrAlbums /
+        flickrMeta. Browser-only fields th/dm (tile thumb) and vp (video
+        poster) are added to fresh copies here — never to data.json.
+        """
+        flickr = self.data_package.get("flickr") or {}
+        items = {}
+        for pid, entry in (flickr.get("items") or {}).items():
+            m0 = entry.get("m", [None])[0]
+            if not m0:
+                continue  # no media source yet — not in the browser data
+            copy = dict(entry)
+            thumb_name = hashlib.md5(m0.encode()).hexdigest() + ".webp"
+            thumb_path = f"thumbnails/{thumb_name}"
+            if os.path.exists(os.path.join(self.output_dir, thumb_path)):
+                key, val = _thumb_field(thumb_path)
+            else:
+                key, val = _thumb_field(m0)
+            if key:
+                copy[key] = val
+            if copy.get("vd") and os.path.exists(
+                os.path.join(self.output_dir, thumb_path)
+            ):
+                copy["vp"] = thumb_path
+            items[pid] = copy
+
+        payload = {
+            "path_alias": flickr.get("meta", {}).get("path_alias", ""),
+        }
+        js_dir = self.output_dir / "js"
+        with open(js_dir / "flickr-data.js", "w", encoding="utf-8") as f:
+            f.write("window.flickrData = " + _as_json_parse(items) + ";\n")
+            f.write(
+                "window.flickrAlbums = "
+                + _as_json_parse(flickr.get("albums") or {})
+                + ";\n"
+            )
+            f.write("window.flickrMeta = " + _as_json_parse(payload) + ";\n")
+        print(f"Wrote flickr browser data: {js_dir / 'flickr-data.js'}")
 
     def _build_cities(self):
         """

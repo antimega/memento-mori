@@ -127,25 +127,69 @@
         }
     };
 
-    // Lazy, memoized index: monthKey -> dayKey -> {posts:[ts], stories:[ts], date}
+    // Lazy, memoized index: monthKey -> dayKey -> {posts, stories, flickr}
     var monthIndex = null;
 
     function buildIndex() {
         if (monthIndex) return;
         monthIndex = {};
+        function dayOf(epoch) {
+            var d = new Date(epoch * 1000);
+            var mk = d.getUTCFullYear() + '-' + pad2(d.getUTCMonth() + 1);
+            var dk = mk + '-' + pad2(d.getUTCDate());
+            var month = monthIndex[mk] || (monthIndex[mk] = {});
+            return month[dk] || (month[dk] = {
+                posts: [], stories: [], flickr: [], date: d
+            });
+        }
         function add(data, isStory) {
             if (!data) return;
             Object.keys(data).forEach(function (ts) {
-                var d = new Date(parseInt(ts, 10) * 1000);
-                var mk = d.getUTCFullYear() + '-' + pad2(d.getUTCMonth() + 1);
-                var dk = mk + '-' + pad2(d.getUTCDate());
-                var month = monthIndex[mk] || (monthIndex[mk] = {});
-                var day = month[dk] || (month[dk] = { posts: [], stories: [], date: d });
+                var day = dayOf(parseInt(ts, 10));
                 (isStory ? day.stories : day.posts).push(ts);
             });
         }
         add(window.postData, false);
         add(window.storiesData, true);
+        // Flickr items (id-keyed; epoch in entry.t) — third row per day
+        if (window.flickrData) {
+            Object.keys(window.flickrData).forEach(function (id) {
+                dayOf(window.flickrData[id].t).flickr.push(id);
+            });
+        }
+    }
+
+    // Parity target: the flickr tile in templates/timeline.html
+    function flickrTimelineTile(id, entry) {
+        var alias = (window.flickrMeta && window.flickrMeta.path_alias) || '';
+        var a = document.createElement('a');
+        a.className = 'grid-item timeline-tile flickr-tile';
+        a.setAttribute('data-id', id);
+        a.setAttribute('href', 'https://www.flickr.com/photos/' + alias + '/' + id + '/');
+
+        var media = document.createElement('div');
+        media.className = 'tile-media';
+
+        var img = document.createElement('img');
+        img.src = entry.th ? 'thumbnails/' + entry.th + '.webp'
+            : (entry.dm || (entry.m && entry.m[0]) || '');
+        img.alt = 'Flickr photo';
+        img.loading = 'lazy';
+        media.appendChild(img);
+
+        if (entry.vd) {
+            var vi = document.createElement('div');
+            vi.className = 'video-indicator';
+            vi.textContent = '▶ Video';
+            media.appendChild(vi);
+        }
+        a.appendChild(media);
+
+        var place = document.createElement('div');
+        place.className = 'tile-place';
+        place.textContent = entry.tt || '';   // user data — never innerHTML
+        a.appendChild(place);
+        return a;
     }
 
     function descTs(a, b) {
@@ -230,6 +274,27 @@
                 });
                 section.appendChild(sr);
             }
+            if (day.flickr.length) {
+                // Third section, after posts and stories (matches the
+                // server-rendered newest month in templates/timeline.html)
+                var fl = day.flickr.slice().sort(function (a, b) {
+                    return (window.flickrData[b].t - window.flickrData[a].t)
+                        || (parseInt(b, 10) - parseInt(a, 10));
+                });
+                var flabel = document.createElement('div');
+                flabel.className = 'timeline-row-label';
+                flabel.textContent =
+                    'Flickr photos and videos (' + fl.length + ')';
+                section.appendChild(flabel);
+                var fr = document.createElement('div');
+                fr.className = 'timeline-posts';
+                fl.forEach(function (id) {
+                    fr.appendChild(
+                        flickrTimelineTile(id, window.flickrData[id])
+                    );
+                });
+                section.appendChild(fr);
+            }
             frag.appendChild(section);
         });
 
@@ -242,8 +307,16 @@
         return mmBuildMonth(monthKeyOf(ts));
     }
 
+    // Deep-link month for non-timestamp targets (?photo=<flickr id>);
+    // month-nav.js prefers this hook and falls back to timestamp math.
+    function mmMonthKeyOfTarget(target) {
+        var entry = window.flickrData && window.flickrData[target];
+        return entry ? monthKeyOf(entry.t) : null;
+    }
+
     window.monthKeyOf = monthKeyOf;
     window.mmTiles = mmTiles;
     window.mmBuildMonth = mmBuildMonth;
     window.mmEnsureMonthFor = mmEnsureMonthFor;
+    window.mmMonthKeyOfTarget = mmMonthKeyOfTarget;
 })();

@@ -89,6 +89,19 @@ def main():
              "skips archive extraction and media processing entirely",
     )
     parser.add_argument(
+        "--flickr",
+        type=str,
+        help="Path to a Flickr data export folder to import as a separate "
+             "section (combinable with --regenerate to add Flickr to an "
+             "already-generated site)",
+    )
+    parser.add_argument(
+        "--flickr-refresh",
+        action="store_true",
+        help="Re-run the Flickr API metadata sweep and retry previously "
+             "failed media downloads",
+    )
+    parser.add_argument(
         "--verbose", "-v",
         action="store_true",
         help="Enable verbose output for debugging",
@@ -169,6 +182,23 @@ def main():
             "story_count": len(stories),
             "city_tags": city_tags,
         }
+        # Flickr: re-import when --flickr is given (the way to add Flickr to
+        # an existing site), else carry the sidecar's section forward
+        if args.flickr:
+            from memento_mori.flickr import import_flickr
+            print(f"\n📷 IMPORTING FLICKR from {args.flickr}")
+            data["flickr"] = import_flickr(
+                args.flickr, output_dir,
+                ig_timestamps=list(posts.keys()),
+                thread_count=args.threads,
+                quality=args.quality,
+                max_dimension=args.max_dimension,
+                api_key=os.environ.get("FLICKR_API_KEY"),
+                refresh=args.flickr_refresh,
+                verbose=args.verbose,
+            )
+        elif sidecar.get("flickr"):
+            data["flickr"] = sidecar["flickr"]
         if not args.gtag_id:
             args.gtag_id = (sidecar.get("settings") or {}).get("gtag_id")
         print(f"\n♻️  REGENERATE MODE")
@@ -327,6 +357,24 @@ def main():
             # Update stories data if it exists
             if "stories" in data and media_result.get("updated_stories_data"):
                 data["stories"] = media_result["updated_stories_data"]
+
+        # Flickr: import when requested; in merge mode carry the existing
+        # site's section forward so an Instagram merge never drops it
+        if args.flickr:
+            from memento_mori.flickr import import_flickr
+            print(f"\n📷 IMPORTING FLICKR from {args.flickr}")
+            data["flickr"] = import_flickr(
+                args.flickr, output_dir,
+                ig_timestamps=list(data["posts"].keys()),
+                thread_count=args.threads,
+                quality=args.quality,
+                max_dimension=args.max_dimension,
+                api_key=os.environ.get("FLICKR_API_KEY"),
+                refresh=args.flickr_refresh,
+                verbose=args.verbose,
+            )
+        elif args.merge and existing and existing.get("flickr"):
+            data["flickr"] = existing["flickr"]
 
         # Generate website with the loaded data
         print("\n🌐 GENERATING WEBSITE")

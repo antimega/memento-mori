@@ -3,6 +3,7 @@
 # baking them in bloats the image and leaves stale copies that
 # shadow the real files on the host.
 instagram*/
+flickr*/
 output/
 test-out/
 *.zip

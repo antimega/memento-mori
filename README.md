@@ -20,7 +20,7 @@ docker compose run --rm memento-mori
 - Email addresses
 - Other private information
 
-Only share the generated output folder after processing with this tool. Note that the generated site includes the location data attached to your posts: place names, and coordinates rounded to ~10 m (4 decimal places). Each post that has coordinates shows a small location map in its detail view, and the optional city maps plot these locations too. This is the same location you originally attached when posting, but it is fairly precise — review it before publishing.
+Only share the generated output folder after processing with this tool. Note that the generated site includes the location data attached to your posts: place names, and coordinates rounded to ~10 m (4 decimal places). Each post that has coordinates shows a small location map in its detail view, and the optional city maps plot these locations too. A Flickr import adds more of the same: only your **public** Flickr items are ever included, but their geotags (street-level for most), titles, descriptions, and tags are all published in the site. This is the same information you originally attached when posting, but it is fairly precise — review it before publishing.
 
 ## How It Works
 Memento Mori processes your Instagram data export and generates a static site with your posts and stories, copying all your media files into an organized structure that can be viewed offline or hosted on your own website.
@@ -30,6 +30,7 @@ Memento Mori processes your Instagram data export and generates a static site wi
 - **Stories Support**: View your Instagram Stories in a 9:16 viewer, advancing at your own pace
 - **Timeline View**: Every post and story grouped by date, newest first, paginated month by month — plus an **On This Day** view showing memories from the same calendar day in previous years
 - **Cities**: Tag posts and stories by city and get a dedicated page with a clickable index and an interactive map; write a Markdown blurb for each city
+- **Flickr import**: Fold your Flickr archive in as its own separate section — public photos and videos only, browsed month by month, with titles, descriptions, tags, albums, and location maps; Instagram cross-posts are automatically de-duplicated
 - **Favourites**: Star your best posts and stories so they surface first within each city
 - **Places & Maps**: Shows the tagged location under each post thumbnail, and a small location map inside the post view, drawn from your archive's location data
 - **Incremental Updates**: Merge a fresh export into an existing site without reprocessing everything, and re-render the site in seconds after editing
@@ -107,6 +108,9 @@ Options:
 --merge          Merge a newer export (--input, required) into an existing generated site in --output
 --city-tags PATH Path to city tags JSON exported from the editor [default: <output>/city_tags.json]
 --regenerate     Re-render the site HTML from the existing output's data.json (fast; no archive needed)
+--flickr PATH    Path to a Flickr data export folder to import as a separate section
+                 (combinable with --regenerate to add Flickr to an existing site)
+--flickr-refresh Re-run the Flickr API metadata sweep and retry failed media downloads
 --verbose, -v    Enable verbose output for debugging
 ```
 
@@ -152,7 +156,8 @@ After the tool finishes processing your Instagram data, open `index.html` from t
 
 - **posts** (`index.html`) — the main grid, sortable by newest, oldest, or random. Click any post to open it in a modal, which shows a small map of its location when coordinates are available.
 - **stories** (`stories.html`) — your Stories in a 9:16 viewer; advance them yourself with the arrows or by clicking.
-- **days** (`timeline.html`) — every post and story grouped by date, newest first, paginated one month at a time, with an **On This Day** toggle for memories from previous years.
+- **days** (`timeline.html`) — every post, story, and Flickr item grouped by date, newest first, paginated one month at a time (back to 2001 once Flickr is imported), with an **On This Day** toggle for memories from previous years. Each day shows posts, then stories, then a "Flickr photos and videos" section.
+- **photos** (`flickr.html`) — appears once you've imported a Flickr archive (see below); your public Flickr photos and videos in one grid like the posts page (loading progressively as you scroll), sortable newest/oldest/random, with a viewer showing the title, description, tags, albums, and location.
 - **cities** (`cities.html`) — appears once you've tagged posts with cities (see below); shows one city at a time with an interactive map and a clickable index.
 
 You can upload the entire output directory to any static web host to share it online. (The editor pages — see below — are generated too; delete `edit.html` and `edit-cities.html` before publishing if you don't want them public. `data.json` is only used by `--merge`/`--regenerate` and is never loaded by the site, so you can also leave it out of a published copy to save a few MB — just keep your own copy for future updates.)
@@ -170,6 +175,26 @@ If you only changed `city_tags.json` (or want to re-render after upgrading the t
 ```bash
 docker compose run --rm memento-mori --regenerate
 ```
+
+## Importing a Flickr Archive
+
+Memento Mori can fold a [Flickr data export](https://www.flickr.com/account) into the site as its own section (a **photos** entry in every page's navigation), kept fully separate from the Instagram posts and stories.
+
+1. Request your Flickr data and download at least the **account data** part (the JSON metadata). Media parts are optional — see below. Put it all in one folder, e.g. `./flickr-download/`, containing `flickr_metadata/` and any media parts — either as extracted `data-download-*` folders **or as the `data-download-*.zip` files exactly as Flickr serves them** (no unzipping needed; only your public items are extracted, which also saves disk).
+2. (Recommended) Get a free [Flickr API key](https://www.flickr.com/services/api/) — it's the only way to identify which of your items are videos and fetch their playback URLs. One metadata sweep runs once and is cached; the key never appears in the generated site.
+3. Run the import (combinable with `--regenerate` so your Instagram content is untouched):
+   ```bash
+   FLICKR_API_KEY=yourkey docker compose run --rm memento-mori --regenerate --flickr ./flickr-download
+   ```
+
+What it does:
+
+- Imports **only your own, public** items — private and friends&family photos are excluded, as are other people's photos you favourited.
+- **Downloads any missing originals** straight from the CDN links in your own metadata (politely rate-limited; resumable, so you can interrupt and re-run). You don't need to download all of Flickr's media export parts by hand — though any you do download are used directly, and they're the only offline source for videos.
+- Converts everything through the same WebP/thumbnail pipeline as the Instagram media, applies Flickr's rotation fixes, and shows titles, descriptions, tags, album links, view/fave counts, and a location map for geotagged photos (Flickr coordinates are precise to street level — see the security note above).
+- **De-duplicates Instagram cross-posts**: Flickr copies of posts already in your Instagram archive are excluded automatically (by upload-time matching). Every exclusion is listed in `flickr-download/flickr_dedup_report.json`, and you can add or remove ids by hand in `flickr_exclude.json` and regenerate.
+
+Later runs are fast: the metadata re-parses in about a minute, and downloads/conversions/API results are all cached.
 
 ## Cities, Favourites & the Editor
 
