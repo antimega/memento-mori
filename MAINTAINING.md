@@ -153,7 +153,7 @@ Three rules follow from it:
 | `cli.py` | A flag, plus a branch in the collection step |
 | `generator.py` | `SOURCE_PRIORITY` entry, a `_nav_row_<key>` builder listed in `NAV_ROW_BUILDERS`, page generators, a browser-data writer, timeline day-bucket + tile ctx |
 | Templates | Its pages, its timeline section, its tile markup (**parity contract** — see §5) |
-| JS | `mmTiles.<key>` builder, a viewer, an `on-this-day.js` PROVIDERS entry, a `map.js` PROVIDERS entry (if it carries coordinates) |
+| JS | `mmTiles.<key>` builder, a viewer, an `on-this-day.js` PROVIDERS entry, a `map.js` PROVIDERS entry (if it carries coordinates), the `KINDS` array in `editor-common.js` (if it should be city-taggable) |
 | `merger.py` | **Nothing.** Non-Instagram sources are carried through `--merge` by a generic loop |
 
 **The clobber guard.** A fresh run rebuilds `data.json` from only what it was
@@ -258,8 +258,9 @@ editor's overlay/export like everything else.
   "bio": "optional site bio override",
   "posts":   { "<ts>": "City" },
   "stories": { "<ts>": "City" },
+  "flickr":  { "<photo_id>": "City" },
   "cities":  { "City": { "lat": 0.0, "lng": 0.0, "text": "**Markdown**" } },
-  "favorites": { "posts": { "<ts>": true }, "stories": {} } }
+  "favorites": { "posts": { "<ts>": true }, "stories": {}, "flickr": {} } }
 ```
 
 ---
@@ -296,7 +297,12 @@ by **index**, deep links via `?post=`/`?story=`, UTC date basis throughout.
   "Timeline ⇄ On this day" toggle. See §6 — this is the subsystem to understand
   before touching the timeline.
 
-- **`cities.html`** — one city shown at a time (London default; hash
+- **`cities.html`** — per city: posts, then **Flickr photos**, then stories
+  (that order is deliberate). The Flickr section needs `flickr-data.js`,
+  `flickr-viewer.js` and the `_flickr_viewer.html` partial — all three, or
+  the tiles are inert — and `showCity` must set `window.mmFlickrOrder` to
+  the visible city's ids, because this page has no month panels for the
+  viewer's DOM fallback to walk. One city shown at a time (London default; hash
   `#city-slug` written only on user selection). Leaflet map of tagged cities
   (`setTimeout` init, not rAF; `fadeAnimation:false`; `invalidateSize`). Per-city
   Markdown rendered by an inline body script via `marked.parse(el.textContent)`.
@@ -369,6 +375,18 @@ by **index**, deep links via `?post=`/`?story=`, UTC date basis throughout.
   Selection renders in 300-tile batches (a 12k cluster must not build 12k
   nodes), sets `window.mmFlickrOrder` so the Flickr viewer's prev/next stays
   inside the selection, and focuses the heading so the change is announced.
+
+- **`edit-flickr.html`** — the Flickr city-tagging editor. Pick a tag, get
+  everything under it **selected**, click to drop individual items, then
+  apply a city or a favourite to the rest. Two things differ from the other
+  editor pages. First, the model: on edit.html a click tags the tile it
+  lands on, here a click only toggles *inclusion* and the toolbar buttons
+  do the writing. Second, it is the **only editor page that loads a data
+  file** (`flickr-data.js` + `flickr-grid.js` for `mmFlickrGridTile`) —
+  the others render tiles server-side, which is impossible at 30k items.
+  Selection is a Set over the tag's **whole id list**, not the rendered
+  tiles: the grid appends in 300-batches, so tracking the DOM would silently
+  skip everything not yet scrolled into view.
 
 - **`edit.html` + `edit-cities.html`** — the private tagging/favourites/city-text
   editor. **Loads no data files** — it embeds `window.cityTags` and renders tiles
@@ -653,6 +671,11 @@ verify each. Keep the viewport fixed between captures.
 - **GitHub auth isn't available in this environment** — commits/pushes are done
   by the maintainer, not the tooling.
 
+- **`editor-common.js` generalizes over a `KINDS` array — use it.** Four call
+  sites already looped, but `pendingCount` spelled `posts`/`stories` out by
+  hand, so Flickr edits were made, persisted and exported while the UI kept
+  reporting "No unexported changes". If you add a kind, grep for any
+  remaining hand-written pair.
 - **Flickr tiles share `.grid-item` but carry `data-id`, not `data-index`.**
   `navigatePost` maps `data-index` over every `.grid-item` on the page, so
   on any mixed page (timeline, map) unfiltered Flickr tiles become `NaN`
@@ -670,6 +693,18 @@ verify each. Keep the viewport fixed between captures.
   looks exactly like a scroll bug — it sent one investigation chasing a
   non-existent clamp. Click something already in the viewport
   (`_click_tile_in_viewport` in the browser tests).
+
+- **Selection state is carried by the tick alone.** In the Flickr city
+  editor every tile starts selected, so the *deselected* state is the one you
+  read across a grid of hundreds — and you have to be able to see the photos
+  you are excluding. The images are therefore left completely untouched (no
+  fade, no desaturation) and only the corner tick changes: filled blue when
+  selected, an empty ring when not. It sits top-right, the only free corner
+  (`.fav-badge` owns top-left, `.city-badge` bottom-left). Two earlier
+  attempts are worth not repeating — `opacity: 0.35` made excluded photos
+  nearly invisible, and a grayscale filter turned the grid into a state map
+  rather than a set of photographs. A browser test pins both halves: the
+  image untouched, the ticks distinct.
 
 **Flickr-specific gotchas:**
 
@@ -750,14 +785,14 @@ memento_mori/
   flickr.py   (Flickr importer: loader, dedup, API client, downloader/processor)
   templates/  index.html grid.html stories_page.html timeline.html cities.html
               flickr.html tags.html albums.html map.html
-              edit.html edit-cities.html
+              edit.html edit-cities.html edit-flickr.html
               _header.html _nav.html _footer.html          (shared chrome)
               _post_modal.html _story_viewer.html _flickr_viewer.html
               (stories.html — UNUSED; the stories page is stories_page.html)
   static/js/  posts-data*/stories-data*/flickr-data* (generated at build)
               modal.js stories.js month-nav.js timeline-months.js on-this-day.js
               flickr-grid.js flickr-viewer.js tags.js albums.js map.js
-              editor-common.js editor.js editor-cities.js
+              editor-common.js editor.js editor-cities.js editor-flickr.js
   static/css/ style.css
   static/vendor/ leaflet/ leaflet.markercluster/ marked/
 flickr-download/  (input, gitignored: flickr_metadata/, data-download-*/,

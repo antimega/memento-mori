@@ -22,6 +22,12 @@
     <script src="js/stories-data.js"></script>
     <script src="js/modal.js"></script>
     <script src="js/stories.js"></script>
+    {% if has_flickr %}
+    {# Deferred, unlike leaflet/marked below: the inline body script uses
+       those at parse time, while Flickr data is only read on a tile click. #}
+    <script src="js/flickr-data.js" defer></script>
+    <script src="js/flickr-viewer.js" defer></script>
+    {% endif %}
     <script src="vendor/leaflet/leaflet.js"></script>
     <script src="vendor/marked/marked.min.js"></script>
   </head>
@@ -38,7 +44,7 @@
         <nav class="city-index" aria-label="Cities">
           {% for city in cities %}
           <button type="button" class="city-chip" data-city="{{ city.slug }}">{{ city.name }}
-            <span class="city-chip-count">{{ city.post_count + city.story_count }}</span></button>
+            <span class="city-chip-count">{{ city.post_count + city.flickr_count + city.story_count }}</span></button>
           {% endfor %}
         </nav>
 
@@ -70,6 +76,27 @@
             {% endfor %}
           </div>
           {% endif %}
+          {% if city.flickr %}
+          <div class="timeline-row-label">{{ city.flickr_count }} Flickr photo{{ 's' if city.flickr_count != 1 }}</div>
+          <div class="timeline-posts">
+            {# Tile markup parity: keep in step with flickr.html, timeline.html
+               and the mmFlickrGridTile / flickrTimelineTile builders. #}
+            {% for item in city.flickr %}
+            <a class="grid-item flickr-tile" data-id="{{ item.id }}" href="{{ item.photopage }}">
+              <div class="tile-media">
+                <img src="{{ item.display_media }}" alt="Flickr photo"{{ item.lazy_load }}>
+                {% if item.is_fav %}
+                <div class="fav-indicator">★</div>
+                {% endif %}
+                {% if item.is_video %}
+                <div class="video-indicator">▶ Video</div>
+                {% endif %}
+              </div>
+              <div class="tile-place">{{ item.title }}</div>
+            </a>
+            {% endfor %}
+          </div>
+          {% endif %}
           {% if city.stories %}
           <div class="timeline-row-label">{{ city.story_count }} stor{{ 'ies' if city.story_count != 1 else 'y' }}</div>
           <div class="timeline-stories">
@@ -94,6 +121,10 @@
     {% include "_post_modal.html" %}
 
     {% include "_story_viewer.html" %}
+
+    {% if has_flickr %}
+    {% include "_flickr_viewer.html" %}
+    {% endif %}
 
     <script>
       // Render each city's Markdown text (stored escaped; textContent
@@ -136,6 +167,13 @@
               c.removeAttribute('aria-current');
             }
           });
+          // Scope the Flickr viewer's prev/next to the city on screen. This
+          // page has no month panels, so navIds()'s DOM fallback would find
+          // nothing and the arrows would be dead without it.
+          window.mmFlickrOrder = Array.prototype.map.call(
+            target.querySelectorAll('.flickr-tile'),
+            function (t) { return t.getAttribute('data-id'); }
+          );
           return slug;
         }
 
@@ -196,7 +234,9 @@
           var strong = document.createElement('strong');
           strong.textContent = c.name;
           div.appendChild(strong);
-          div.appendChild(document.createTextNode(' — ' + c.posts + ' posts, ' + c.stories + ' stories'));
+          var summary = c.posts + ' posts, ' + c.stories + ' stories';
+          if (c.flickr) summary += ', ' + c.flickr + ' photos';
+          div.appendChild(document.createTextNode(' — ' + summary));
           div.appendChild(document.createElement('br'));
           var a = document.createElement('button');
           a.type = 'button';

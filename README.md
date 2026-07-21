@@ -340,15 +340,16 @@ Alongside the viewer, Memento Mori generates a private **editor** (`edit.html` a
    - Switch to **★ Favourite** mode and click tiles to star your favourites.
    - Browse a month at a time with the month picker at the top.
 3. **Profile description**: the text shown at the top of every page starts as your Instagram bio; edit it in the box at the top of `edit.html`.
-4. **City text** (`edit-cities.html`): write a short blurb for each city. **Markdown** is supported (headings, emphasis, links, lists) with a live preview.
-5. **Export.** Click **Export city_tags.json** and save the download as `output/city_tags.json`.
-6. **Regenerate** (takes seconds — no archive or media reprocessing needed):
+4. **Flickr cities** (`edit-flickr.html`): tag Flickr photos and videos with cities in bulk. Pick one of your Flickr tags — everything under it starts selected — click any photo to drop it, then apply a city or ★ favourite the rest in one go. (Appears once you've imported a Flickr archive.)
+5. **City text** (`edit-cities.html`): write a short blurb for each city. **Markdown** is supported (headings, emphasis, links, lists) with a live preview.
+6. **Export.** Click **Export city_tags.json** and save the download as `output/city_tags.json`.
+7. **Regenerate** (takes seconds — no archive or media reprocessing needed):
    ```bash
    docker compose run --rm memento-mori --regenerate
    # or: python -m memento_mori.cli --regenerate
    ```
 
-A **cities** link now appears in every page's navigation. The cities page shows one city at a time — click a city chip or a map marker to switch. Within each city, items are listed newest-first, with favourites pulled to the top and marked with a ★, and your city blurb rendered under the heading.
+A **cities** link now appears in every page's navigation. The cities page shows one city at a time — click a city chip or a map marker to switch. Within each city you get posts, then Flickr photos, then stories — each newest-first, with favourites pulled to the top and marked with a ★, and your city blurb rendered under the heading.
 
 ### Notes
 
@@ -364,7 +365,8 @@ A **cities** link now appears in every page's navigation. The cities page shows 
     "version": 1,
     "posts":     { "<timestamp>": "London" },
     "stories":   { "<timestamp>": "Porto" },
-    "favorites": { "posts": { "<timestamp>": true }, "stories": {} },
+    "flickr":    { "<photo_id>": "Venice" },
+    "favorites": { "posts": { "<timestamp>": true }, "stories": {}, "flickr": {} },
     "cities":    { "London": { "lat": 51.51, "lng": -0.13, "text": "Home." } },
     "bio":       "Optional override for the description under the site title."
   }

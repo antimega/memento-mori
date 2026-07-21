@@ -1026,21 +1026,34 @@ class InstagramSiteGenerator:
 
     def _build_cities(self):
         """
-        Group tagged posts/stories by city from the city_tags data.
+        Group tagged posts/stories/Flickr items by city from the city_tags
+        data.
 
-        Returns {name: {"posts": [tile_ctx...], "stories": [tile_ctx...],
-                        "lat": float|None, "lng": float|None, "newest": int}}
-        with items sorted newest-first per city. Coordinates come from a
-        manual override in the tags file when present, otherwise the median
-        of the tagged items' coordinates.
+        Returns {name: {"posts": [tile_ctx...], "flickr": [...],
+                        "stories": [...], "lat": float|None,
+                        "lng": float|None, "newest": int}}
+        with items sorted newest-first per city (favourites first).
+        Coordinates come from a manual override in the tags file when
+        present, otherwise the median of the tagged items' coordinates —
+        Flickr items contribute to that median like any other.
         """
         tags = self.data_package.get("city_tags") or {}
-        if not (tags.get("posts") or tags.get("stories")):
+        if not (tags.get("posts") or tags.get("stories") or tags.get("flickr")):
             return {}
 
         cities = {}
         skipped = 0
-        raw = {}  # name -> {"posts": [(ts, entry)], "stories": [...], "coords": [...]}
+        raw = {}  # name -> {"posts": [(key, entry)], "stories", "flickr", "coords"}
+
+        def bucket_for(name):
+            return raw.setdefault(
+                name, {"posts": [], "stories": [], "flickr": [], "coords": []}
+            )
+
+        def note_coords(bucket, entry):
+            lat, lng = entry.get("la"), entry.get("lo")
+            if isinstance(lat, (int, float)) and isinstance(lng, (int, float)):
+                bucket["coords"].append((lat, lng))
 
         for kind in ("posts", "stories"):
             # Freshly loaded posts are keyed by int timestamps while
@@ -1055,13 +1068,22 @@ class InstagramSiteGenerator:
                 if not name or entry is None:
                     skipped += 1
                     continue
-                bucket = raw.setdefault(
-                    name, {"posts": [], "stories": [], "coords": []}
-                )
+                bucket = bucket_for(name)
                 bucket[kind].append((str(ts), entry))
-                lat, lng = entry.get("la"), entry.get("lo")
-                if isinstance(lat, (int, float)) and isinstance(lng, (int, float)):
-                    bucket["coords"].append((lat, lng))
+                note_coords(bucket, entry)
+
+        # Flickr items are keyed by photo id, not timestamp — no numeric
+        # normalization applies, and ordering has to come from the entry's
+        # import index rather than from the key.
+        for pid, name in (tags.get("flickr") or {}).items():
+            name = (name or "").strip()
+            entry = self.flickr_items.get(str(pid))
+            if not name or entry is None:
+                skipped += 1
+                continue
+            bucket = bucket_for(name)
+            bucket["flickr"].append((str(pid), entry))
+            note_coords(bucket, entry)
 
         if skipped:
             print(f"Warning: {skipped} city tags reference unknown or empty items; ignored")
@@ -1070,6 +1092,7 @@ class InstagramSiteGenerator:
         favorites = tags.get("favorites") or {}
         fav_posts = favorites.get("posts") or {}
         fav_stories = favorites.get("stories") or {}
+        fav_flickr = favorites.get("flickr") or {}
 
         for name, bucket in raw.items():
             # Favourited items first, then reverse-chronological within
@@ -1079,6 +1102,11 @@ class InstagramSiteGenerator:
             )
             bucket["stories"].sort(
                 key=lambda p: (not fav_stories.get(p[0]), -int(p[0]))
+            )
+            # "i" is the stable newest-first import index; the photo id in
+            # p[0] carries no chronology, so it must not be sorted on.
+            bucket["flickr"].sort(
+                key=lambda p: (not fav_flickr.get(p[0]), p[1].get("i", 0))
             )
 
             override = overrides.get(name) or {}
@@ -1104,9 +1132,17 @@ class InstagramSiteGenerator:
                 tile["is_fav"] = bool(fav_stories.get(ts))
                 story_tiles.append(tile)
 
+            flickr_tiles = []
+            for pid, e in bucket["flickr"]:
+                tile = self._flickr_tile_ctx(pid, e)
+                tile["is_fav"] = bool(fav_flickr.get(pid))
+                flickr_tiles.append(tile)
+
             all_ts = [int(ts) for ts, _ in bucket["posts"] + bucket["stories"]]
+            all_ts += [e.get("t", 0) for _, e in bucket["flickr"]]
             cities[name] = {
                 "posts": post_tiles,
+                "flickr": flickr_tiles,
                 "stories": story_tiles,
                 "lat": lat,
                 "lng": lng,
@@ -1142,8 +1178,10 @@ class InstagramSiteGenerator:
                     "slug": slug,
                     "text": city.get("text", ""),
                     "posts": city["posts"],
+                    "flickr": city.get("flickr", []),
                     "stories": city["stories"],
                     "post_count": len(city["posts"]),
+                    "flickr_count": len(city.get("flickr", [])),
                     "story_count": len(city["stories"]),
                 }
             )
@@ -1155,6 +1193,7 @@ class InstagramSiteGenerator:
                         "lat": city["lat"],
                         "lng": city["lng"],
                         "posts": len(city["posts"]),
+                        "flickr": len(city.get("flickr", [])),
                         "stories": len(city["stories"]),
                     }
                 )
@@ -1180,12 +1219,13 @@ class InstagramSiteGenerator:
             "version": 1,
             "posts": {},
             "stories": {},
+            "flickr": {},
             "cities": {},
-            "favorites": {"posts": {}, "stories": {}},
+            "favorites": {"posts": {}, "stories": {}, "flickr": {}},
         }
         tags = dict(tags)  # embed-only copy; don't mutate the package
         if "favorites" not in tags:
-            tags["favorites"] = {"posts": {}, "stories": {}}
+            tags["favorites"] = {"posts": {}, "stories": {}, "flickr": {}}
         # Embed the EFFECTIVE bio so the editor's textarea starts from what
         # the site currently shows (exported city_tags.json then becomes the
         # authoritative source for it)
@@ -1218,3 +1258,16 @@ class InstagramSiteGenerator:
             f.write(_minify_html(html_content))
 
         print(f"Generated editor HTML file: {self.output_dir / 'edit-cities.html'}")
+
+        # The Flickr city-tagging page. Unlike the other editor pages it
+        # builds its grid client-side from flickr-data.js — 30k items cannot
+        # be server-rendered the way the Instagram tiles are.
+        if self.flickr_items:
+            template = self.jinja_env.get_template("edit-flickr.html")
+            html_content = template.render(
+                city_tags_json=_escape_inline_json(tags),
+                **self._page_context(),
+            )
+            with open(self.output_dir / "edit-flickr.html", "w", encoding="utf-8") as f:
+                f.write(_minify_html(html_content))
+            print(f"Generated editor HTML file: {self.output_dir / 'edit-flickr.html'}")
