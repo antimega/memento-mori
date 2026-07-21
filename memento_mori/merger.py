@@ -1,12 +1,102 @@
 # memento_mori/merger.py
 import json
+import shutil
 from datetime import datetime
 from pathlib import Path
+
+# Sidecar schema version. v1 was Instagram-shaped: posts/stories/profile at
+# the top level with an optional "flickr" key bolted alongside. v2 puts every
+# import under "sources", so a new source is a registry entry rather than
+# another special case threaded through the CLI and generator.
+SCHEMA_VERSION = 2
+
+# Which source's profile provides the site's identity (username, bio,
+# website) when several are present. First match wins.
+SOURCE_PRIORITY = ["instagram", "flickr"]
+
+
+def migrate_sidecar(sidecar):
+    """
+    Return a v2-shaped sidecar, converting v1 in memory if needed.
+
+    v1 detection is simply the absence of "sources". The mapping:
+      posts/stories/profile  -> sources.instagram
+      flickr                 -> sources.flickr (profile synthesized from meta)
+      location/settings      -> carried through
+    Dropped: post_count/story_count (derived from the data) and date_range
+    (no template consumes it). Both were stored duplicates that could drift.
+
+    v2 input passes through untouched, so this is safe to call on every load.
+    """
+    if "sources" in sidecar:
+        return sidecar
+
+    sources = {}
+
+    posts = sidecar.get("posts") or {}
+    stories = sidecar.get("stories") or {}
+    profile = sidecar.get("profile")
+    if posts or stories or profile:
+        sources["instagram"] = {
+            "profile": profile or {},
+            "posts": posts,
+            "stories": stories,
+        }
+
+    flickr = sidecar.get("flickr")
+    if flickr:
+        flickr = dict(flickr)
+        # v1 never stored a Flickr profile; synthesize the identity fields
+        # that are recoverable so a Flickr-only site can name itself after
+        # migration rather than falling back to "Unknown".
+        if not flickr.get("profile"):
+            alias = (flickr.get("meta") or {}).get("path_alias", "")
+            flickr["profile"] = {
+                "username": alias,
+                "name": "",
+                "bio": "",
+                "website": "",
+                "profile_picture": "",
+            }
+        sources["flickr"] = flickr
+
+    migrated = {
+        "schema_version": SCHEMA_VERSION,
+        "location": sidecar.get("location") or {"location": "Unknown"},
+        "sources": sources,
+    }
+    if sidecar.get("settings"):
+        migrated["settings"] = sidecar["settings"]
+    return migrated
+
+
+def backup_v1_sidecar(output_dir):
+    """
+    Copy a v1 data.json aside once, before it is overwritten in v2 form.
+
+    Migration is automatic, so the user never asked for it and has no other
+    copy. Written once and never overwritten: a later v2 run must not clobber
+    the original with an already-migrated file.
+    """
+    output_dir = Path(output_dir)
+    sidecar = output_dir / "data.json"
+    backup = output_dir / "data.v1.bak.json"
+    if not sidecar.exists() or backup.exists():
+        return None
+    try:
+        with open(sidecar, encoding="utf-8") as f:
+            if "sources" in json.load(f):
+                return None          # already v2, nothing to preserve
+    except (OSError, json.JSONDecodeError):
+        return None
+    shutil.copy2(sidecar, backup)
+    print(f"   Backed up the pre-migration sidecar to {backup}")
+    return backup
 
 
 def load_existing_site_data(output_dir, verbose=False):
     """
-    Load the data package of a previously generated site.
+    Load the data package of a previously generated site, migrated to v2.
 
     Prefers the data.json sidecar; falls back to parsing the JSON embedded
     in index.html for sites generated before the sidecar existed.
@@ -16,8 +106,9 @@ def load_existing_site_data(output_dir, verbose=False):
         verbose (bool): Whether to print debug information
 
     Returns:
-        dict: {"posts": dict, "stories": dict, "settings": dict,
-               "profile": dict or None, "source": "sidecar" or "html"}
+        dict: {"sources": dict, "location": dict, "settings": dict,
+               "source": "sidecar" or "html", plus "posts"/"stories"/
+               "profile"/"flickr" convenience views into sources}
 
     Raises:
         FileNotFoundError: If the output directory has no generated site
@@ -28,17 +119,13 @@ def load_existing_site_data(output_dir, verbose=False):
 
     if sidecar_path.exists():
         with open(sidecar_path, "r", encoding="utf-8") as f:
-            sidecar = json.load(f)
+            raw = json.load(f)
+        migrated = migrate_sidecar(raw)
         if verbose:
             print(f"Loaded existing site data from sidecar: {sidecar_path}")
-        return {
-            "posts": sidecar.get("posts", {}),
-            "stories": sidecar.get("stories", {}),
-            "settings": sidecar.get("settings", {}),
-            "profile": sidecar.get("profile"),
-            "flickr": sidecar.get("flickr"),
-            "source": "sidecar",
-        }
+            if "sources" not in raw:
+                print("   (migrated a v1 sidecar to the v2 sources schema)")
+        return _existing_view(migrated, "sidecar")
 
     if not index_path.exists():
         raise FileNotFoundError(
@@ -50,14 +137,51 @@ def load_existing_site_data(output_dir, verbose=False):
     stories = _parse_embedded_json(index_path, "window.storiesData")
     if verbose:
         print(f"Loaded existing site data from HTML: {index_path}")
+    return _existing_view({
+        "schema_version": SCHEMA_VERSION,
+        "location": {"location": "Unknown"},
+        "sources": {"instagram": {"profile": {}, "posts": posts, "stories": stories}},
+    }, "html")
+
+
+def _existing_view(migrated, origin):
+    """
+    Wrap a migrated sidecar with the flat keys the merge flow reads.
+
+    The convenience keys are views onto sources, not copies, so the merge
+    path can keep reading existing["posts"] while the sidecar itself is
+    source-shaped.
+    """
+    sources = migrated.get("sources") or {}
+    instagram = sources.get("instagram") or {}
     return {
-        "posts": posts,
-        "stories": stories,
-        "settings": {},
-        "profile": None,
-        "flickr": None,
-        "source": "html",
+        "sources": sources,
+        "location": migrated.get("location") or {"location": "Unknown"},
+        "settings": migrated.get("settings", {}),
+        "posts": instagram.get("posts") or {},
+        "stories": instagram.get("stories") or {},
+        "profile": instagram.get("profile") or None,
+        "flickr": sources.get("flickr"),
+        "source": origin,
     }
+
+
+def site_identity(sources):
+    """
+    The site's profile: the first source profile along SOURCE_PRIORITY.
+
+    Derived on every render rather than stored, so it cannot go stale when a
+    source is added, refreshed or removed. Sources not in the priority list
+    are considered last, in insertion order, so a new importer still names
+    the site rather than leaving it "Unknown".
+    """
+    order = SOURCE_PRIORITY + [k for k in sources if k not in SOURCE_PRIORITY]
+    for key in order:
+        profile = (sources.get(key) or {}).get("profile") or {}
+        if profile.get("username"):
+            return profile
+    return {"username": "Unknown", "bio": "", "website": "",
+            "name": "", "profile_picture": ""}
 
 
 def _parse_embedded_json(html_path, var_name):

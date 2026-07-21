@@ -72,7 +72,15 @@ def site(tmp_path_factory):
 
     flickr = root / "flickr-download"
     flickr.mkdir()
-    info = make_flickr_export(flickr)
+    # Plant a Flickr item on today's calendar day three years back, so On
+    # This Day has a Flickr memory as well as Instagram ones.
+    flickr_otd = now.replace(year=now.year - 3, hour=9, minute=0, second=0,
+                             microsecond=0)
+    # filler makes flickr.html long enough to scroll past the point where
+    # body overflow:hidden clamps the offset — the short page a minimal
+    # fixture produces cannot reproduce that class of bug.
+    info = make_flickr_export(
+        flickr, otd_date=flickr_otd.strftime("%Y-%m-%d %H:%M:%S"), filler=120)
     write_api_cache(flickr, video_ids=[info["ids"]["video"]])
 
     out = root / "output"

@@ -212,3 +212,144 @@ def test_pages_work_from_the_filesystem(page, site):
         page.wait_for_timeout(150)
     # tiles still render with no origin
     assert page.locator("#tagIndex .city-chip").count() > 0
+
+
+def test_on_this_day_includes_flickr_memories(page, base_url):
+    """
+    On This Day spans every source. Flickr entries are id-keyed with the date
+    inside the entry, so they exercise the provider's timeOf hook.
+    """
+    page.goto(f"{base_url}/timeline.html")
+    page.locator("#viewOnThisDay").click()
+    otd = page.locator("#onThisDay")
+    otd.wait_for(state="visible", timeout=5000)
+
+    # The Flickr memory is planted 3 years back; its tile carries data-id
+    # (Flickr) rather than data-index (Instagram).
+    flickr_tiles = otd.locator(".otd-tile[data-id]")
+    assert flickr_tiles.count() > 0, "no Flickr memories in On this day"
+
+    flickr_tiles.first.click()
+    page.locator("#flickrModal").wait_for(state="visible", timeout=5000)
+    page.keyboard.press("Escape")
+    page.locator("#flickrModal").wait_for(state="hidden", timeout=5000)
+
+
+def test_on_this_day_story_tiles_keep_their_shape(page, base_url):
+    """
+    Story tiles are 9:16 and must not pick up the square .otd-tile styling
+    that posts and Flickr items use.
+    """
+    page.goto(f"{base_url}/timeline.html")
+    page.locator("#viewOnThisDay").click()
+    page.locator("#onThisDay").wait_for(state="visible", timeout=5000)
+    stories = page.locator("#onThisDay .timeline-story-tile")
+    if stories.count():
+        assert stories.first.evaluate(
+            "el => el.classList.contains('otd-tile')") is False
+
+
+# --------------------------------------------------------------------------
+# regressions: viewer navigation and scroll restoration
+# --------------------------------------------------------------------------
+
+def test_flickr_arrows_work_from_on_this_day(page, base_url):
+    """
+    Opening a Flickr memory from On This Day must leave prev/next working.
+
+    The viewer's fallback nav order is "the visible month panel's tiles", and
+    an On This Day item is from a previous year by definition — so it was
+    never in that panel and the arrows silently did nothing.
+    """
+    page.goto(f"{base_url}/timeline.html")
+    page.locator("#viewOnThisDay").click()
+    otd = page.locator("#onThisDay")
+    otd.wait_for(state="visible", timeout=5000)
+
+    tiles = otd.locator(".otd-tile[data-id]")
+    assert tiles.count() > 1, "need at least two Flickr memories to navigate"
+    first_id = tiles.first.get_attribute("data-id")
+
+    tiles.first.click()
+    page.locator("#flickrModal").wait_for(state="visible", timeout=5000)
+    page.locator("#flickrNext").click()
+    page.wait_for_timeout(300)
+
+    assert page.evaluate(
+        "new URLSearchParams(location.search).get('photo')"
+    ) != first_id, "next arrow did not move to another photo"
+
+
+def test_flickr_arrows_cycle_within_the_memories(page, base_url):
+    """
+    Prev/next should walk the memories on screen, not the whole archive —
+    matching how the tag and album pages scope navigation.
+    """
+    page.goto(f"{base_url}/timeline.html")
+    page.locator("#viewOnThisDay").click()
+    page.locator("#onThisDay").wait_for(state="visible", timeout=5000)
+    ids = page.locator("#onThisDay .otd-tile[data-id]").evaluate_all(
+        "els => els.map(e => e.getAttribute('data-id'))")
+
+    page.locator("#onThisDay .otd-tile[data-id]").first.click()
+    page.locator("#flickrModal").wait_for(state="visible", timeout=5000)
+    page.locator("#flickrNext").click()
+    page.wait_for_timeout(300)
+    now = page.evaluate("new URLSearchParams(location.search).get('photo')")
+    assert now != ids[0], "next arrow did not move"
+    assert now in ids, f"navigated to {now}, which is not one of the memories"
+
+
+def _click_tile_in_viewport(page, selector):
+    """
+    Click a tile that is already on screen.
+
+    Playwright scrolls an element into view before clicking it, so clicking
+    an arbitrary tile moves the page and looks exactly like a scroll bug.
+    That artifact sent an earlier version of this test chasing a clamp that
+    did not exist — always click something already visible.
+    """
+    idx = page.evaluate("""(sel) => {
+        const els = [...document.querySelectorAll(sel)];
+        for (let i = 0; i < els.length; i++) {
+            const r = els[i].getBoundingClientRect();
+            if (r.top > 60 && r.bottom < window.innerHeight - 60) return i;
+        }
+        return -1;
+    }""", selector)
+    assert idx >= 0, f"no {selector} in the viewport"
+    page.locator(selector).nth(idx).click()
+    return idx
+
+
+def test_closing_a_viewer_does_not_scroll_the_page(page, base_url, browser_name):
+    """
+    Closing a viewer must leave the reader where they were.
+
+    This is a WebKit-only failure in practice: Safari does not focus an <a>
+    when it is clicked, so the viewer's saved "element to restore focus to"
+    ends up being an ancestor like <main tabindex="-1">, and focusing that
+    scrolls it into view — jumping the reader to the top of the page.
+    Chromium focuses the link itself and never shows it, so this test is
+    close to meaningless unless it also runs with --browser webkit.
+    """
+    page.goto(f"{base_url}/timeline.html")
+    page.locator("#viewOnThisDay").click()
+    page.locator("#onThisDay").wait_for(state="visible", timeout=5000)
+    page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+    page.wait_for_timeout(400)
+
+    before = page.evaluate("window.scrollY")
+    if before < 400:
+        pytest.skip(f"On This Day view too short to detect a jump ({before}px)")
+
+    _click_tile_in_viewport(page, "#onThisDay .otd-tile[data-id]")
+    page.locator("#flickrModal").wait_for(state="visible", timeout=5000)
+    page.keyboard.press("Escape")
+    page.locator("#flickrModal").wait_for(state="hidden", timeout=5000)
+    page.wait_for_timeout(400)
+
+    after = page.evaluate("window.scrollY")
+    assert abs(after - before) < 150, (
+        f"[{browser_name}] closing scrolled the page: was {before}, now {after}"
+    )

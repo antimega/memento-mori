@@ -143,7 +143,14 @@ class FlickrDataLoader:
             )
 
     def load_account(self):
-        """{'nsid': ..., 'path_alias': ...} from account_profile.json."""
+        """
+        Identity fields from account_profile.json.
+
+        Beyond nsid/path_alias (needed for the API sweep and photopage URLs)
+        this returns the fields that let Flickr supply the *site's* identity
+        when it is the only source: real name, bio and website. Flickr's
+        export has no avatar, so profile_picture stays empty.
+        """
         path = self.meta_dir / "account_profile.json"
         with open(path, encoding="utf-8") as f:
             profile = json.load(f)
@@ -151,6 +158,9 @@ class FlickrDataLoader:
             "nsid": profile.get("nsid", ""),
             "path_alias": profile.get("path_alias")
             or profile.get("screen_name", ""),
+            "real_name": profile.get("real_name", ""),
+            "description": profile.get("description", ""),
+            "website_url": profile.get("website_url", ""),
         }
 
     def load_items(self):
@@ -1055,6 +1065,16 @@ def import_flickr(flickr_path, output_dir, ig_timestamps=None,
         referenced.update(e.get("al", []))
 
     return {
+        # Each source carries its own profile; the generator picks the
+        # site's identity from these by SOURCE_PRIORITY, so a Flickr-only
+        # site names itself from the Flickr account.
+        "profile": {
+            "username": account["path_alias"],
+            "name": account.get("real_name", ""),
+            "bio": account.get("description", ""),
+            "website": account.get("website_url", ""),
+            "profile_picture": "",
+        },
         "items": items,
         "albums": loader.load_albums(referenced),
         "meta": {

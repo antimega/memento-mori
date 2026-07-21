@@ -18,6 +18,12 @@ jobs:
           # app actually runs.
           python-version: "3.10"
           cache: pip
+          # Point the cache key at the one file that declares dependencies.
+          # Without this, setup-python globs the workspace to build the key
+          # and has been seen failing on a pull_request merge checkout with
+          # "ENOENT: scandir .git/objects/..." — an infra flake that fails
+          # the job before pytest ever runs.
+          cache-dependency-path: pyproject.toml
 
       # python-magic needs libmagic; Pillow/opencv need the image libs.
       - name: Install system dependencies
@@ -32,8 +38,16 @@ jobs:
         run: pytest -q
 
   browser-tests:
-    name: browser (playwright smoke)
+    name: browser (${{ matrix.browser }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Both engines, deliberately. A focus-restoration bug that threw the
+        # reader to the top of the page was invisible in Chromium and only
+        # reproduced in WebKit, because Safari does not focus a link when it
+        # is clicked. Chromium alone would not have caught it.
+        browser: [chromium, webkit]
     steps:
       - uses: actions/checkout@v4
 
@@ -41,6 +55,12 @@ jobs:
         with:
           python-version: "3.10"
           cache: pip
+          # Point the cache key at the one file that declares dependencies.
+          # Without this, setup-python globs the workspace to build the key
+          # and has been seen failing on a pull_request merge checkout with
+          # "ENOENT: scandir .git/objects/..." — an infra flake that fails
+          # the job before pytest ever runs.
+          cache-dependency-path: pyproject.toml
 
       - name: Install system dependencies
         run: |
@@ -54,10 +74,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
+          key: playwright-${{ runner.os }}-${{ matrix.browser }}-${{ hashFiles('pyproject.toml') }}
 
-      - name: Install Chromium
-        run: playwright install --with-deps chromium
+      - name: Install browser
+        run: playwright install --with-deps ${{ matrix.browser }}
 
       - name: Run browser smoke tests
-        run: pytest -m browser -q
+        run: pytest -m browser -q --browser ${{ matrix.browser }}

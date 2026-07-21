@@ -146,11 +146,22 @@ def test_sidecar_has_no_browser_only_fields(built):
 
 
 def test_sidecar_shape(built):
+    """
+    Schema v2: every import lives under `sources`, and nothing derivable is
+    stored — counts and identity are computed at render time so they cannot
+    drift from the data they describe.
+    """
     data = read_data_json(built["out"])
-    assert data["profile"]["username"] == "testuser"
-    assert data["profile"]["bio"] == "A test bio"
-    assert data["post_count"] == len(data["posts"])
-    assert data["settings"]["schema_version"] == 1
+    assert data["schema_version"] == 2
+    assert set(data["sources"]) == {"instagram"}
+
+    instagram = data["sources"]["instagram"]
+    assert instagram["profile"]["username"] == "testuser"
+    assert instagram["profile"]["bio"] == "A test bio"
+    assert instagram["posts"] and instagram["stories"]
+
+    for derived in ("post_count", "story_count", "date_range"):
+        assert derived not in data, f"{derived} is derivable and should not be stored"
     assert "city_tags" not in data, "city_tags must be popped from the sidecar"
 
 

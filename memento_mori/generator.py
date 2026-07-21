@@ -11,6 +11,8 @@ import hashlib
 import base64
 import statistics
 
+from memento_mori.merger import SCHEMA_VERSION, migrate_sidecar, site_identity
+
 
 def _slugify(name):
     """Make a safe anchor slug from a city name."""
@@ -118,11 +120,28 @@ class InstagramSiteGenerator:
     """
 
     def __init__(self, data_package, output_dir, template_dir=None, static_dir=None, gtag_id=None):
-        """Initialize the generator with data and path options."""
-        self.data_package = data_package
+        """
+        Initialize the generator with data and path options.
+
+        The package is source-shaped (schema v2): everything imported lives
+        under `sources`, keyed by importer name. A v1 package is migrated on
+        the way in, so callers holding old data still work.
+        """
+        self.data_package = migrate_sidecar(data_package)
         self.output_dir = Path(output_dir)
         self.gtag_id = gtag_id  # Store the Google tag ID
         self.cities = {}  # Populated by generate() from city_tags
+
+        # Handles onto the sources this build has. Read these rather than
+        # reaching into data_package: a missing source is an empty dict, so
+        # every page generator can ask "do I have content?" without each
+        # caller repeating the same .get() chains.
+        self.sources = self.data_package.get("sources") or {}
+        self.instagram = self.sources.get("instagram") or {}
+        self.posts = self.instagram.get("posts") or {}
+        self.stories = self.instagram.get("stories") or {}
+        self.flickr = self.sources.get("flickr") or {}
+        self.flickr_items = self.flickr.get("items") or {}
 
         # Find template directory
         if template_dir is None:
@@ -183,19 +202,28 @@ class InstagramSiteGenerator:
             # Write the shared post/story data scripts the pages load
             self._write_browser_data()
 
-            # Generate HTML
-            self._generate_html()
+            # index.html is the Instagram grid when Instagram is present.
+            # Without it, the URL still has to exist and lead somewhere, so
+            # it becomes a redirect to the highest-priority source's home
+            # page — keeping every other page's links identical across site
+            # flavors, and surviving a later --merge that fills it in.
+            if self.posts or self.stories:
+                self._generate_html()
+            elif self._has_content():
+                self._write_index_redirect()
 
             # Generate stories HTML if we have stories data
-            if "stories" in self.data_package and self.data_package["stories"]:
+            if self.stories:
                 self._generate_stories_html()
 
-            # Generate timeline HTML if there is anything to show
-            if self.data_package.get("posts") or self.data_package.get("stories"):
+            # The timeline spans every source, so it is gated on content from
+            # ANY of them — not on Instagram, which is what made a
+            # Flickr-only site ship a dead "days" nav link.
+            if self._has_content():
                 self._generate_timeline_html()
 
             # Generate the Flickr section when an import is present
-            if (self.data_package.get("flickr") or {}).get("items"):
+            if self.flickr_items:
                 self._write_flickr_browser_data()
                 self._generate_flickr_html()
                 self._generate_tags_html()
@@ -205,8 +233,9 @@ class InstagramSiteGenerator:
             if self.cities:
                 self._generate_cities_html()
 
-            # Generate the (unlinked) editor page used for tagging
-            if self.data_package.get("posts") or self.data_package.get("stories"):
+            # The editor is also gated on any source: it owns the site bio,
+            # which every flavor needs to be able to edit.
+            if self._has_content():
                 self._generate_edit_html()
 
             # Write the machine-readable sidecar used by --merge
@@ -219,6 +248,44 @@ class InstagramSiteGenerator:
             print(f"Error generating website: {str(e)}")
             return False
 
+    def _has_content(self):
+        """True when any source actually imported something."""
+        return bool(self.posts or self.stories or self.flickr_items)
+
+    def _home_page(self):
+        """
+        The page a visitor should land on, given which sources exist.
+
+        Instagram keeps index.html so published URLs never move; otherwise
+        the highest-priority source with content supplies the landing page.
+        """
+        if self.posts or self.stories:
+            return "index.html"
+        if self.flickr_items:
+            return "flickr.html"
+        return "timeline.html"
+
+    def _write_index_redirect(self):
+        """
+        Write index.html as a redirect to the real landing page.
+
+        Hand-built rather than templated: it must stay tiny and dependency
+        free, and it is replaced wholesale by the real grid the moment an
+        Instagram archive is merged in.
+        """
+        target = self._home_page()
+        html = (
+            '<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="UTF-8">\n'
+            f'<meta http-equiv="refresh" content="0; url={target}">\n'
+            f'<link rel="canonical" href="{target}">\n'
+            "<title>Memento Mori</title>\n</head>\n<body>\n"
+            f'<p><a href="{target}">Continue to the archive</a></p>\n'
+            "</body>\n</html>\n"
+        )
+        with open(self.output_dir / "index.html", "w", encoding="utf-8") as f:
+            f.write(html)
+        print(f"Generated index redirect to {target}")
+
     def _write_data_json(self):
         """
         Write the full data package to a data.json sidecar in the output.
@@ -226,18 +293,29 @@ class InstagramSiteGenerator:
         Later --merge runs read this to know what the site already contains
         (and to carry settings like the gtag ID forward) without having to
         parse the generated HTML.
+
+        Schema v2: every import lives under "sources". Nothing derivable is
+        stored — counts and the site identity are computed at render time, so
+        they cannot drift out of step with the data they describe.
         """
-        sidecar = dict(self.data_package)
-        # city_tags.json is the single source of truth for tags; don't let a
-        # stale copy ride along in data.json
-        sidecar.pop("city_tags", None)
-        # Drop empty optional fields to keep the sidecar small
-        sidecar["posts"] = _compact_entries(self.data_package.get("posts", {}) or {})
-        sidecar["stories"] = _compact_entries(self.data_package.get("stories", {}) or {})
-        sidecar["settings"] = {
-            "gtag_id": self.gtag_id,
-            "generated_at": datetime.datetime.now().strftime("%Y-%m-%d"),
-            "schema_version": 1,
+        sources = {}
+        for key, section in self.sources.items():
+            section = dict(section)
+            if key == "instagram":
+                # Drop empty optional fields to keep the sidecar small
+                section["posts"] = _compact_entries(section.get("posts") or {})
+                section["stories"] = _compact_entries(section.get("stories") or {})
+            sources[key] = section
+
+        sidecar = {
+            "schema_version": SCHEMA_VERSION,
+            "location": self.data_package.get("location") or {"location": "Unknown"},
+            "sources": sources,
+            "settings": {
+                "gtag_id": self.gtag_id,
+                "generated_at": datetime.datetime.now().strftime("%Y-%m-%d"),
+                "schema_version": SCHEMA_VERSION,
+            },
         }
 
         with open(self.output_dir / "data.json", "w", encoding="utf-8") as f:
@@ -252,8 +330,8 @@ class InstagramSiteGenerator:
         loads these once (cached across pages) instead of inlining its own
         copy, and it works over file:// where fetch() would not.
         """
-        posts = _compact_entries(self.data_package.get("posts", {}) or {})
-        stories = _compact_entries(self.data_package.get("stories", {}) or {})
+        posts = _compact_entries(self.posts)
+        stories = _compact_entries(self.stories)
 
         # Enrich each entry with the thumbnail the browser needs to rebuild the
         # tile image for on-demand timeline months, mirroring the same media
@@ -354,7 +432,7 @@ class InstagramSiteGenerator:
 
     def _render_grid(self):
         """Render the grid HTML using the grid.html template."""
-        posts_data = self.data_package["posts"]
+        posts_data = self.posts
         lazy_after = 30  # Start lazy loading after this many posts
 
         # Check if posts_data is valid
@@ -459,7 +537,7 @@ class InstagramSiteGenerator:
         return result
     def _generate_stories_html(self):
         """Generate a separate HTML file for stories."""
-        stories_data = self.data_package.get("stories", {})
+        stories_data = self.stories
         
         if not stories_data:
             print("No stories data found, skipping stories.html generation")
@@ -516,9 +594,9 @@ class InstagramSiteGenerator:
     def _timeline_day_count(self):
         """Number of distinct calendar days with a post, story, or Flickr
         item (all three appear on the timeline)."""
-        posts = self.data_package.get("posts", {}) or {}
-        stories = self.data_package.get("stories", {}) or {}
-        flickr = (self.data_package.get("flickr") or {}).get("items") or {}
+        posts = self.posts
+        stories = self.stories
+        flickr = self.flickr_items
         days = {self._day_of(k) for k in posts} | {
             self._day_of(k) for k in stories
         }
@@ -573,8 +651,8 @@ class InstagramSiteGenerator:
         first ~30 tiles load eagerly. The editor keeps include_flickr=False
         (it only tags Instagram content).
         """
-        posts_data = self.data_package.get("posts", {}) or {}
-        stories_data = self.data_package.get("stories", {}) or {}
+        posts_data = self.posts
+        stories_data = self.stories
 
         def _bucket(day):
             return days.setdefault(
@@ -593,7 +671,7 @@ class InstagramSiteGenerator:
             )
 
         if include_flickr:
-            flickr = (self.data_package.get("flickr") or {}).get("items") or {}
+            flickr = self.flickr_items
             for pid, entry in sorted(
                 flickr.items(), key=lambda kv: kv[1]["i"]
             ):
@@ -641,47 +719,87 @@ class InstagramSiteGenerator:
             return str(years[0])
         return f"{years[0]}-{years[-1]}"
 
+    def _nav_row_instagram(self):
+        """Nav row for the Instagram source, or None when it has no content."""
+        if not (self.posts or self.stories):
+            return None
+        epochs = [int(t) for t in self.posts] + [int(t) for t in self.stories]
+        profile = (self.instagram.get("profile") or {})
+        links = [("posts", "index.html", len(self.posts), "posts")]
+        if self.stories:
+            links.append(("stories", "stories.html", len(self.stories), "stories"))
+        return {
+            "label": f"Instagram {profile.get('username', '')} "
+                     f"({self._year_span(epochs)}):",
+            "links": links,
+        }
+
+    def _nav_row_flickr(self):
+        """Nav row for the Flickr source, or None when it has no content."""
+        if not self.flickr_items:
+            return None
+        alias = (self.flickr.get("profile") or {}).get("username") \
+            or self.flickr.get("meta", {}).get("path_alias", "")
+        epochs = [e["t"] for e in self.flickr_items.values()]
+        links = [("photos", "flickr.html", len(self.flickr_items), "photos")]
+        tags = self._flickr_tags()
+        if tags:
+            links.append(("tags", "tags.html", len(tags), "tags"))
+        albums = self.flickr.get("albums") or {}
+        if albums:
+            links.append(("albums", "albums.html", len(albums), "albums"))
+        return {
+            "label": f"Flickr {alias} ({self._year_span(epochs)}):",
+            "links": links,
+        }
+
+    # One builder per source, in the order the rows should appear. Adding a
+    # source's nav presence is an entry here plus its builder — the template
+    # loops over whatever this produces and needs no edit.
+    NAV_ROW_BUILDERS = ["_nav_row_instagram", "_nav_row_flickr"]
+
+    def _flickr_tags(self):
+        tags = set()
+        for entry in self.flickr_items.values():
+            tags.update(entry.get("tg") or [])
+        return tags
+
     def _page_context(self):
         """Template context shared by every page's header/nav (_nav.html)."""
-        profile_info = self.data_package["profile"]
-        posts = self.data_package.get("posts", {}) or {}
-        stories = self.data_package.get("stories", {}) or {}
-        story_count = self.data_package.get("story_count", 0)
+        # Identity is derived from the sources on every render rather than
+        # stored, so it cannot go stale when a source is added or refreshed.
+        profile_info = site_identity(self.sources)
         cities = getattr(self, "cities", {}) or {}
-        flickr = self.data_package.get("flickr") or {}
-        flickr_items = flickr.get("items") or {}
-        flickr_tags = set()
-        for entry in flickr_items.values():
-            flickr_tags.update(entry.get("tg") or [])
-        flickr_albums = flickr.get("albums") or {}
+        flickr_tags = self._flickr_tags()
+        flickr_albums = self.flickr.get("albums") or {}
 
         # Bio: the editor's exported bio (city_tags.json) is authoritative
-        # when the key is present; otherwise the Instagram profile bio
+        # when the key is present; otherwise the identity source's bio
         city_tags = self.data_package.get("city_tags") or {}
         bio = profile_info.get("bio", "")
         if city_tags.get("bio") is not None:
             bio = city_tags["bio"]
 
-        insta_epochs = [int(t) for t in posts] + [int(t) for t in stories]
-        flickr_epochs = [e["t"] for e in flickr_items.values()]
+        nav_rows = []
+        for builder in self.NAV_ROW_BUILDERS:
+            row = getattr(self, builder)()
+            if row:
+                nav_rows.append(row)
 
         return {
-            "username": profile_info["username"],
+            "username": profile_info.get("username", "Unknown"),
             "bio": bio,
             "profile": profile_info,
-            "date_range": self.data_package["date_range"]["range"],
-            "post_count": self.data_package["post_count"],
-            "story_count": story_count,
-            "has_stories": story_count > 0,
-            "has_instagram": bool(posts or stories),
-            "insta_years": self._year_span(insta_epochs),
+            "nav_rows": nav_rows,
+            "post_count": len(self.posts),
+            "story_count": len(self.stories),
+            "has_stories": bool(self.stories),
+            "has_instagram": bool(self.posts or self.stories),
             "day_count": self._timeline_day_count(),
             "has_cities": bool(cities),
             "city_count": len(cities),
-            "has_flickr": bool(flickr_items),
-            "flickr_count": len(flickr_items),
-            "flickr_alias": flickr.get("meta", {}).get("path_alias", ""),
-            "flickr_years": self._year_span(flickr_epochs),
+            "has_flickr": bool(self.flickr_items),
+            "flickr_count": len(self.flickr_items),
             "has_flickr_tags": bool(flickr_tags),
             "flickr_tag_count": len(flickr_tags),
             "has_flickr_albums": bool(flickr_albums),
@@ -735,7 +853,7 @@ class InstagramSiteGenerator:
     # from the Instagram posts/stories.
 
     def _flickr_photopage(self, pid):
-        alias = (self.data_package.get("flickr") or {}).get("meta", {}).get(
+        alias = self.flickr.get("meta", {}).get(
             "path_alias", ""
         )
         return f"https://www.flickr.com/photos/{alias}/{pid}/"
@@ -769,7 +887,7 @@ class InstagramSiteGenerator:
         page); flickr-grid.js appends the rest progressively from
         window.flickrData as the user scrolls, and handles sorting.
         """
-        items = (self.data_package.get("flickr") or {}).get("items") or {}
+        items = self.flickr_items
         eager = 30       # load immediately, like index.html
         server_chunk = 60  # server-rendered so the grid paints during parse
 
@@ -835,7 +953,7 @@ class InstagramSiteGenerator:
         flickrMeta. Browser-only fields th/dm (tile thumb) and vp (video
         poster) are added to fresh copies here — never to data.json.
         """
-        flickr = self.data_package.get("flickr") or {}
+        flickr = self.flickr
         items = {}
         for pid, entry in (flickr.get("items") or {}).items():
             m0 = entry.get("m", [None])[0]
@@ -892,7 +1010,8 @@ class InstagramSiteGenerator:
             # Freshly loaded posts are keyed by int timestamps while
             # JSON-round-tripped data uses strings; normalize for lookup
             source = {
-                str(k): v for k, v in (self.data_package.get(kind, {}) or {}).items()
+                str(k): v
+                for k, v in (getattr(self, kind) or {}).items()
             }
             for ts, name in (tags.get(kind) or {}).items():
                 name = (name or "").strip()
@@ -1035,7 +1154,7 @@ class InstagramSiteGenerator:
         # the site currently shows (exported city_tags.json then becomes the
         # authoritative source for it)
         if tags.get("bio") is None:
-            tags["bio"] = self.data_package["profile"].get("bio", "")
+            tags["bio"] = site_identity(self.sources).get("bio", "")
 
         months = self._build_month_list()
 

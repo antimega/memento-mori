@@ -1,7 +1,11 @@
-    {# Shared profile header + three-row navigation. Include with
+    {# Shared profile header + navigation. Include with
        {% set active_page = '...' %} first (posts / stories / days / cities /
-       photos / tags / albums). Service rows are data-driven and hide when
-       that import is absent. #}
+       photos / tags / albums).
+
+       Row 1 (days, cities) spans every source and is explicit. The service
+       rows come from `nav_rows`, built per source in generator.py
+       (NAV_ROW_BUILDERS) — a new import gets a nav row by adding a builder
+       there, with no edit here. #}
     {% macro navlink(page, href, count, label) -%}
     <div class="stat">
       <a href="{{ href }}" class="nav-link{% if active_page == page %} active{% endif %}"{% if active_page == page %} aria-current="page"{% endif %}>
@@ -25,27 +29,14 @@
             {{ navlink('cities', 'cities.html', city_count, 'cities') }}
             {% endif %}
           </div>
-          {% if has_instagram %}
+          {% for row in nav_rows %}
           <div class="nav-row">
-            <span class="nav-service-label">Instagram {{ username }} ({{ insta_years }}):</span>
-            {{ navlink('posts', 'index.html', post_count, 'posts') }}
-            {% if has_stories %}
-            {{ navlink('stories', 'stories.html', story_count, 'stories') }}
-            {% endif %}
+            <span class="nav-service-label">{{ row.label }}</span>
+            {% for page, href, count, label in row.links %}
+            {{ navlink(page, href, count, label) }}
+            {% endfor %}
           </div>
-          {% endif %}
-          {% if has_flickr %}
-          <div class="nav-row">
-            <span class="nav-service-label">Flickr {{ flickr_alias }} ({{ flickr_years }}):</span>
-            {{ navlink('photos', 'flickr.html', flickr_count, 'photos') }}
-            {% if has_flickr_tags %}
-            {{ navlink('tags', 'tags.html', flickr_tag_count, 'tags') }}
-            {% endif %}
-            {% if has_flickr_albums %}
-            {{ navlink('albums', 'albums.html', flickr_album_count, 'albums') }}
-            {% endif %}
-          </div>
-          {% endif %}
+          {% endfor %}
         </div>
       </div>
     </div>
