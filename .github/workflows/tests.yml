@@ -18,6 +18,12 @@ jobs:
           # app actually runs.
           python-version: "3.10"
           cache: pip
+          # Point the cache key at the one file that declares dependencies.
+          # Without this, setup-python globs the workspace to build the key
+          # and has been seen failing on a pull_request merge checkout with
+          # "ENOENT: scandir .git/objects/..." — an infra flake that fails
+          # the job before pytest ever runs.
+          cache-dependency-path: pyproject.toml
 
       # python-magic needs libmagic; Pillow/opencv need the image libs.
       - name: Install system dependencies
@@ -41,6 +47,12 @@ jobs:
         with:
           python-version: "3.10"
           cache: pip
+          # Point the cache key at the one file that declares dependencies.
+          # Without this, setup-python globs the workspace to build the key
+          # and has been seen failing on a pull_request merge checkout with
+          # "ENOENT: scandir .git/objects/..." — an infra flake that fails
+          # the job before pytest ever runs.
+          cache-dependency-path: pyproject.toml
 
       - name: Install system dependencies
         run: |
