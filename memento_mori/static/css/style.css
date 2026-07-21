@@ -1382,6 +1382,46 @@ a.story-item {
   z-index: 0; /* keep Leaflet panes under the post/story viewer overlays */
 }
 
+/* Flickr city editor: tiles start selected; clicking one drops it from the
+   batch about to be tagged. The deselected state has to read as "excluded"
+   at a glance across a grid of hundreds. */
+.editor-selection {
+  margin: 16px 0;
+}
+
+.editor-selection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.editor-selection-count {
+  margin-right: 8px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.editor-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+#flickrEditGrid .grid-item {
+  cursor: pointer;
+  outline: 2px solid #0095f6;
+  outline-offset: -2px;
+  border-radius: 4px;
+}
+
+#flickrEditGrid .grid-item.deselected {
+  outline-color: transparent;
+  opacity: 0.35;
+}
+
 /* Map page: one clustered map of every geotagged item, with the selected
    cluster's items listed underneath. */
 .map-container {

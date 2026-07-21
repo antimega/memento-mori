@@ -20,6 +20,9 @@
       <nav class="editor-nav">
         <a href="edit.html" class="editor-nav-link active">Tag &amp; favourite</a>
         <a href="edit-cities.html" class="editor-nav-link">City text</a>
+        {% if has_flickr %}
+        <a href="edit-flickr.html" class="editor-nav-link">Flickr cities</a>
+        {% endif %}
       </nav>
 
       <div class="editor-intro">

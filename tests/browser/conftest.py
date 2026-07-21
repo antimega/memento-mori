@@ -113,7 +113,28 @@ def site(tmp_path_factory):
     finally:
         sys.argv = argv
 
-    return {"out": out, "ig_ts": ig_ts, "otd_ts": otd_ts, "ids": info["ids"]}
+    # City tags covering all three sources, so the cities page can be driven
+    # end to end (section order, the Flickr viewer, within-city navigation).
+    import json
+    tagged_flickr = [str(info["ids"]["plain"]), str(info["ids"]["geo"]),
+                     str(info["ids"]["collide_a"])]
+    (out / "city_tags.json").write_text(json.dumps({
+        "version": 1,
+        "posts": {str(ig_ts["single"]): "Venice"},
+        "stories": {str(ig_ts["story"]): "Venice"},
+        "flickr": {pid: "Venice" for pid in tagged_flickr},
+        "cities": {},
+        "favorites": {"posts": {}, "stories": {}, "flickr": {}},
+    }), encoding="utf-8")
+    argv = sys.argv
+    sys.argv = ["memento-mori", "--output", str(out), "--regenerate"]
+    try:
+        assert cli.main() == 0, "city-tag regenerate failed"
+    finally:
+        sys.argv = argv
+
+    return {"out": out, "ig_ts": ig_ts, "otd_ts": otd_ts, "ids": info["ids"],
+            "tagged_flickr": tagged_flickr}
 
 
 @pytest.fixture(scope="session")

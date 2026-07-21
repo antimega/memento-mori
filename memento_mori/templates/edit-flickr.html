@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memento Mori - Editor: Flickr cities</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script>window.cityTags = {{ city_tags_json|safe }};</script>
+    {# The only editor page that loads a data file. The other two render
+       their tiles server-side, but a Flickr archive runs to tens of
+       thousands of items — far too many to inline — so the grid is built
+       client-side from flickr-data.js, reusing the tag navigator's shape. #}
+    <script src="js/flickr-data.js"></script>
+    <script src="js/flickr-grid.js"></script>
+    <script src="js/editor-common.js"></script>
+    <script src="js/editor-flickr.js"></script>
+  </head>
+  <body>
+    <header>
+      <div class="header-content">
+        <a href="index.html" class="logo">Memento Mori — Editor</a>
+      </div>
+    </header>
+    <main>
+      <nav class="editor-nav">
+        <a href="edit.html" class="editor-nav-link">Tag &amp; favourite</a>
+        <a href="edit-cities.html" class="editor-nav-link">City text</a>
+        <a href="edit-flickr.html" class="editor-nav-link active">Flickr cities</a>
+      </nav>
+
+      <div class="editor-intro">
+        <p>Pick a Flickr tag to see everything tagged with it — all selected
+        to begin with. Click any photo to deselect it, then apply a city or
+        favourite the rest in one go. Changes are kept in this browser until
+        you export them.</p>
+        <p><a href="index.html">← Back to the site</a></p>
+      </div>
+
+      <div class="editor-bar">
+        <div class="editor-counts" id="editorCounts"></div>
+        <div class="editor-bar-actions">
+          <button type="button" id="exportTags">Export city_tags.json</button>
+          <button type="button" id="clearLocal" class="editor-secondary">Clear local changes</button>
+        </div>
+      </div>
+
+      <div class="editor-controls">
+        <label for="cityInput">City</label>
+        <input type="text" id="cityInput" list="cityNames" placeholder="e.g. Venice"
+               autocomplete="off">
+        <datalist id="cityNames"></datalist>
+      </div>
+
+      <input type="search" id="tagFilter" class="tag-filter"
+             placeholder="Filter tags…" aria-label="Filter Flickr tags">
+      {# Chips are built client-side by editor-flickr.js from
+         window.flickrData, reusing the cities page's chip styling #}
+      <nav class="city-index tag-index" id="tagIndex" aria-label="Flickr tags"></nav>
+
+      <div class="editor-selection" id="selectionBar" hidden>
+        <h2 class="timeline-day-header" id="selectionTitle" tabindex="-1"></h2>
+        <div class="editor-selection-actions">
+          <span class="editor-selection-count" id="selectionCount"></span>
+          <button type="button" id="selectAll" class="editor-secondary">Select all</button>
+          <button type="button" id="selectNone" class="editor-secondary">Select none</button>
+          <button type="button" id="applyCity">Tag selected</button>
+          <button type="button" id="clearCity" class="editor-secondary">Untag selected</button>
+          <button type="button" id="applyFav">★ Favourite selected</button>
+          <button type="button" id="clearFav" class="editor-secondary">Unfavourite selected</button>
+        </div>
+        <div class="editor-warning" id="editorWarning" role="status"></div>
+      </div>
+
+      <div class="posts-grid" id="flickrEditGrid"></div>
+    </main>
+
+    <footer>
+      <div class="footer-content">
+        <p>Generated on {{ generation_date }} with <a href="https://github.com/greg-randall/memento-mori">Memento Mori</a>.</p>
+      </div>
+    </footer>
+  </body>
+</html>

@@ -214,6 +214,8 @@ def main():
             "version": raw_tags.get("version", 1),
             "posts": raw_tags.get("posts", {}) or {},
             "stories": raw_tags.get("stories", {}) or {},
+            # Flickr tags are keyed by photo id, not timestamp
+            "flickr": raw_tags.get("flickr", {}) or {},
             "cities": raw_tags.get("cities", {}) or {},
             # Tri-state: absent (None) means "no override — use the
             # Instagram profile bio"; present (even "") is authoritative
@@ -221,11 +223,16 @@ def main():
             "favorites": {
                 "posts": raw_favorites.get("posts", {}) or {},
                 "stories": raw_favorites.get("stories", {}) or {},
+                "flickr": raw_favorites.get("flickr", {}) or {},
             },
         }
+        favorite_count = sum(
+            len(v) for v in city_tags["favorites"].values()
+        )
         print(f"Loaded city tags: {len(city_tags['posts'])} posts, "
               f"{len(city_tags['stories'])} stories, "
-              f"{len(city_tags['favorites']['posts']) + len(city_tags['favorites']['stories'])} favorites "
+              f"{len(city_tags['flickr'])} flickr, "
+              f"{favorite_count} favorites "
               f"from {city_tags_path}")
     elif args.city_tags:
         print(f"Error: --city-tags file not found: {args.city_tags}")

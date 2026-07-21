@@ -8,6 +8,11 @@ window.MMEditor = (function () {
     var base = null;
     var overlay = null;
 
+    // Every taggable source. Instagram kinds are keyed by timestamp,
+    // Flickr by photo id — the accessors below are key-agnostic, so the
+    // only thing that matters here is the list.
+    var KINDS = ['posts', 'stories', 'flickr'];
+
     function init() {
         if (typeof window.cityTags === 'undefined') {
             return false;
@@ -16,11 +21,13 @@ window.MMEditor = (function () {
         base = window.cityTags;
         base.posts = base.posts || {};
         base.stories = base.stories || {};
+        base.flickr = base.flickr || {};
         base.cities = base.cities || {};
         base.bio = base.bio || '';   // effective site bio (embedded)
         base.favorites = base.favorites || {};
         base.favorites.posts = base.favorites.posts || {};
         base.favorites.stories = base.favorites.stories || {};
+        base.favorites.flickr = base.favorites.flickr || {};
 
         try {
             overlay = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
@@ -29,14 +36,16 @@ window.MMEditor = (function () {
         }
         overlay.posts = overlay.posts || {};
         overlay.stories = overlay.stories || {};
+        overlay.flickr = overlay.flickr || {};
         overlay.favorites = overlay.favorites || {};
         overlay.favorites.posts = overlay.favorites.posts || {};
         overlay.favorites.stories = overlay.favorites.stories || {};
+        overlay.favorites.flickr = overlay.favorites.flickr || {};
         overlay.cityText = overlay.cityText || {};
 
         // Prune overlay entries that match base (after an export +
         // regenerate cycle the overlay becomes redundant)
-        ['posts', 'stories'].forEach(function (kind) {
+        KINDS.forEach(function (kind) {
             Object.keys(overlay[kind]).forEach(function (ts) {
                 var baseVal = base[kind][ts] || null;
                 if (overlay[kind][ts] === baseVal) {
@@ -149,7 +158,7 @@ window.MMEditor = (function () {
 
     function cityNames() {
         var names = {};
-        ['posts', 'stories'].forEach(function (kind) {
+        KINDS.forEach(function (kind) {
             Object.keys(base[kind]).forEach(function (ts) {
                 var c = effective(kind, ts);
                 if (c) names[c] = true;
@@ -178,7 +187,7 @@ window.MMEditor = (function () {
 
     function favCount() {
         var count = 0;
-        ['posts', 'stories'].forEach(function (kind) {
+        KINDS.forEach(function (kind) {
             var seen = {};
             Object.keys(base.favorites[kind]).forEach(function (ts) { seen[ts] = true; });
             Object.keys(overlay.favorites[kind]).forEach(function (ts) { seen[ts] = true; });
@@ -190,15 +199,27 @@ window.MMEditor = (function () {
     }
 
     function pendingCount() {
-        return Object.keys(overlay.posts).length
-            + Object.keys(overlay.stories).length
-            + Object.keys(overlay.favorites.posts).length
-            + Object.keys(overlay.favorites.stories).length
-            + Object.keys(overlay.cityText).length
+        var count = Object.keys(overlay.cityText).length
             + (Object.prototype.hasOwnProperty.call(overlay, 'bio') ? 1 : 0);
+        // Loop the kinds rather than naming them: spelling them out is how
+        // Flickr edits went uncounted here while every other accessor had
+        // already been generalized.
+        KINDS.forEach(function (kind) {
+            count += Object.keys(overlay[kind]).length;
+            count += Object.keys(overlay.favorites[kind]).length;
+        });
+        return count;
     }
 
     // ---- export ----
+
+    // Instagram keys are timestamps, so newest-first is the natural order.
+    // Flickr keys are photo ids with no chronology; they sort numerically
+    // too, which means nothing semantically but keeps the exported file
+    // deterministic (and therefore diffable) across runs.
+    function sortKeys(a, b) {
+        return Number(b) - Number(a);
+    }
 
     function buildExport() {
         var merged = {
@@ -209,16 +230,17 @@ window.MMEditor = (function () {
             bio: effectiveBio(),
             posts: {},
             stories: {},
+            flickr: {},
             cities: {},
-            favorites: { posts: {}, stories: {} }
+            favorites: { posts: {}, stories: {}, flickr: {} }
         };
 
-        ['posts', 'stories'].forEach(function (kind) {
+        KINDS.forEach(function (kind) {
             var seen = {};
             Object.keys(base[kind]).forEach(function (ts) { seen[ts] = true; });
             Object.keys(overlay[kind]).forEach(function (ts) { seen[ts] = true; });
             Object.keys(seen)
-                .sort(function (a, b) { return Number(b) - Number(a); })
+                .sort(sortKeys)
                 .forEach(function (ts) {
                     var city = effective(kind, ts);
                     if (city) merged[kind][ts] = city;
@@ -228,7 +250,7 @@ window.MMEditor = (function () {
             Object.keys(base.favorites[kind]).forEach(function (ts) { seenFav[ts] = true; });
             Object.keys(overlay.favorites[kind]).forEach(function (ts) { seenFav[ts] = true; });
             Object.keys(seenFav)
-                .sort(function (a, b) { return Number(b) - Number(a); })
+                .sort(sortKeys)
                 .forEach(function (ts) {
                     if (effectiveFav(kind, ts)) merged.favorites[kind][ts] = true;
                 });

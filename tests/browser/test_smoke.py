@@ -177,7 +177,7 @@ def test_albums_deep_link_on_a_cold_load(page, base_url):
 def test_tag_filter_box_narrows_the_chips(page, base_url):
     page.goto(f"{base_url}/tags.html")
     total = page.locator("#tagIndex .city-chip").count()
-    page.fill("#tagFilter", "holiday")
+    page.fill("#tagFilter", "filler")
     page.wait_for_timeout(150)
     visible = page.locator("#tagIndex .city-chip:visible").count()
     assert 0 < visible < total, f"filter showed {visible} of {total}"
@@ -556,3 +556,115 @@ def test_nav_is_fully_visible_across_widths(page, base_url):
             clipped.append((width, over))
 
     assert not clipped, f"nav overflows its container at (width, px over): {clipped}"
+
+
+# --------------------------------------------------------------------------
+# Flickr cities: the editor page and the cities-page section
+# --------------------------------------------------------------------------
+
+def test_cities_flickr_section_opens_the_viewer(page, base_url, site):
+    """
+    Flickr tiles in a city must open the viewer, and prev/next must stay
+    inside that city — the cities page has no month panels, so the viewer's
+    DOM fallback would find nothing without mmFlickrOrder.
+    """
+    page.goto(f"{base_url}/cities.html#city-venice")
+    page.wait_for_timeout(800)
+
+    tiles = page.locator(".city-section:not([hidden]) .flickr-tile")
+    assert tiles.count() > 1, "no Flickr tiles in the city section"
+    order = page.evaluate("window.mmFlickrOrder")
+    assert order and len(order) == tiles.count(), (
+        f"mmFlickrOrder ({order}) does not match the city's tiles"
+    )
+
+    tiles.first.click()
+    page.locator("#flickrModal").wait_for(state="visible", timeout=5000)
+    before = page.evaluate("new URLSearchParams(location.search).get('photo')")
+    page.locator("#flickrNext").click()
+    page.wait_for_timeout(400)
+    after = page.evaluate("new URLSearchParams(location.search).get('photo')")
+    assert after != before, "flickr arrow did not move"
+    assert after in order, "flickr arrow navigated outside the city"
+
+
+def test_cities_section_order_is_posts_flickr_stories(page, base_url):
+    page.goto(f"{base_url}/cities.html#city-venice")
+    page.wait_for_timeout(600)
+    kinds = page.evaluate("""() => {
+        const s = document.querySelector('.city-section:not([hidden])');
+        return [...s.querySelectorAll('.timeline-tile, .flickr-tile, .timeline-story-tile')]
+            .map(e => e.classList.contains('flickr-tile') ? 'flickr'
+                    : e.classList.contains('timeline-story-tile') ? 'story' : 'post');
+    }""")
+    assert kinds, "no tiles in the city section"
+    # each kind appears in one contiguous run, in this order
+    first = {k: kinds.index(k) for k in set(kinds)}
+    assert first.get("post", -1) < first.get("flickr", 99) < first.get("story", 999), (
+        f"unexpected tile order: {kinds}"
+    )
+
+
+def test_flickr_editor_bulk_tags_a_selection(page, base_url, site):
+    """
+    The whole point of the page: pick a tag, drop a few, tag the rest. The
+    selection is tracked over the tag's full id list, not the rendered
+    tiles, so this must hold even though the grid renders in batches.
+    """
+    page.goto(f"{base_url}/edit-flickr.html")
+    page.wait_for_timeout(800)
+
+    chips = page.locator("#tagIndex .city-chip")
+    assert chips.count() > 0, "no tag chips built"
+
+    page.fill("#tagFilter", "filler")
+    page.wait_for_timeout(300)
+    page.locator("#tagIndex .city-chip:visible").first.click()
+    page.wait_for_timeout(400)
+
+    total = page.locator("#flickrEditGrid .grid-item").count()
+    assert total > 1, "need more than one item under the tag"
+    assert page.locator("#flickrEditGrid .deselected").count() == 0, (
+        "items should start selected"
+    )
+
+    # deselect the first, then tag the rest
+    dropped = page.locator("#flickrEditGrid .grid-item").first.get_attribute("data-id")
+    page.locator("#flickrEditGrid .grid-item").first.click()
+    page.wait_for_timeout(200)
+    assert page.locator("#flickrEditGrid .deselected").count() == 1
+
+    page.fill("#cityInput", "Testville")
+    page.locator("#applyCity").click()
+    page.wait_for_timeout(400)
+
+    export = page.evaluate("MMEditor.buildExport()")
+    tagged = export.get("flickr", {})
+    assert tagged, "nothing exported under flickr"
+    assert dropped not in [k for k, v in tagged.items() if v == "Testville"], (
+        "the deselected item was tagged anyway"
+    )
+    assert sum(1 for v in tagged.values() if v == "Testville") == total - 1, (
+        "wrong number of items tagged"
+    )
+
+
+def test_flickr_editor_bulk_favourites(page, base_url):
+    page.goto(f"{base_url}/edit-flickr.html")
+    page.wait_for_timeout(800)
+    page.fill("#tagFilter", "filler")
+    page.wait_for_timeout(300)
+    page.locator("#tagIndex .city-chip:visible").first.click()
+    page.wait_for_timeout(400)
+
+    page.locator("#applyFav").click()
+    page.wait_for_timeout(400)
+    assert page.locator("#flickrEditGrid .fav-badge").count() > 0, "no ★ badges"
+
+    export = page.evaluate("MMEditor.buildExport()")
+    assert export.get("favorites", {}).get("flickr"), (
+        "favourites did not reach the export"
+    )
+    assert "unexported" in page.locator("#editorCounts").inner_text(), (
+        "pending-change count did not register the Flickr edits"
+    )
