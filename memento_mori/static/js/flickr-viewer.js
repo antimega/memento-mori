@@ -23,10 +23,6 @@ document.addEventListener('DOMContentLoaded', function () {
     var flickrMap = null;          // Lazily-created Leaflet map, reused
     var flickrMapMarker = null;
 
-    function alias() {
-        return (window.flickrMeta && window.flickrMeta.path_alias) || '';
-    }
-
     function isVideoFile(url) {
         return /\.(mp4|mov|avi|webm|m4v)$/i.test(url || '');
     }
@@ -167,8 +163,9 @@ document.addEventListener('DOMContentLoaded', function () {
         descEl.textContent = entry.ds || '';
         descEl.style.display = entry.ds ? 'block' : 'none';
 
-        // Tag chips — each links to the tag navigator opened on that tag
-        // (user data — createElement/textContent only)
+        // Tag chips — each links to the tag navigator opened on that tag,
+        // under a "Tags" label (user data — createElement/textContent only)
+        var tagsLabel = document.getElementById('flickrTagsLabel');
         tagsEl.innerHTML = '';
         (entry.tg || []).forEach(function (tag) {
             var chip = document.createElement('a');
@@ -184,21 +181,32 @@ document.addEventListener('DOMContentLoaded', function () {
             });
             tagsEl.appendChild(chip);
         });
-        tagsEl.style.display = (entry.tg || []).length ? 'flex' : 'none';
+        var showTags = (entry.tg || []).length > 0;
+        tagsEl.style.display = showTags ? 'flex' : 'none';
+        if (tagsLabel) tagsLabel.hidden = !showTags;
 
-        // Album links
+        // Album links — into the album navigator, under an "Albums" label
+        // (user data — createElement/textContent only)
+        var albumsLabel = document.getElementById('flickrAlbumsLabel');
         albumsEl.innerHTML = '';
         (entry.al || []).forEach(function (aid) {
             var info = (window.flickrAlbums || {})[aid];
             if (!info) return;
             var a = document.createElement('a');
-            a.href = 'https://www.flickr.com/photos/' + alias() + '/albums/' + aid;
-            a.target = '_blank';
-            a.rel = 'noopener noreferrer';
+            a.className = 'flickr-album-link';
+            a.href = 'albums.html#album=' + encodeURIComponent(aid);
             a.textContent = info.t;
+            a.addEventListener('click', function () {
+                // Same-document hash change on the albums page itself:
+                // close the viewer and let albums.js's hashchange handler
+                // switch the album. Elsewhere it's a normal navigation.
+                closeFlickr();
+            });
             albumsEl.appendChild(a);
         });
-        albumsEl.style.display = albumsEl.children.length ? 'block' : 'none';
+        var showAlbums = albumsEl.children.length > 0;
+        albumsEl.style.display = showAlbums ? 'flex' : 'none';
+        if (albumsLabel) albumsLabel.hidden = !showAlbums;
 
         // License only (view/fave counts are not imported)
         statsEl.innerHTML = '';

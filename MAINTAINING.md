@@ -235,6 +235,16 @@ by **index**, deep links via `?post=`/`?story=`, UTC date basis throughout.
   prev/next cycles within the tag. Tag selection is hash-linkable
   (`#tag=<encoded>`), written only on user selection like the cities page.
 
+- **`albums.html`** — the Flickr album navigator, a structural sibling of
+  tags.html (`albums.js` mirrors `tags.js` — change them in step): 148
+  album chips (newest activity first, filterable), progressive per-album
+  grid, hash-linkable `#album=<id>`, viewer prev/next scoped via
+  `mmFlickrOrder`. The viewer's tag and album chips sit under small "Tags"/"Albums"
+  section labels (`.flickr-section-label`, hidden when empty); its album
+  links point here (chip-styled,
+  chip-styled, same-document switch on this page) rather than at
+  flickr.com.
+
 - **`edit.html` + `edit-cities.html`** — the private tagging/favourites/city-text
   editor. **Loads no data files** — it embeds `window.cityTags` and renders tiles
   server-side (so it's ~4 MB and stays that way; out of scope for the timeline
