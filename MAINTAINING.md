@@ -215,12 +215,25 @@ by **index**, deep links via `?post=`/`?story=`, UTC date basis throughout.
   (`_flickr_viewer.html` + `flickr-viewer.js`) is a deliberately trimmed
   sibling of modal.js — single-media, no carousel — with the same
   focus-trap/inert/map patterns and own element ids; shows title,
-  description (`white-space:pre-line`), tag chips, album links, license (when
+  description (`white-space:pre-line`), tag chips (each linking to
+  `tags.html#tag=<tag>` — a same-document hash change on the tags page
+  itself, where the viewer closes and hashchange switches the tag), album
+  links, license (when
   not the default), and a location map. View/fave counts are deliberately
   not imported, and the viewer has no Flickr backlink — the tile `href`
   still points at the photopage as the no-JS fallback. Flickr items ALSO
   appear on the
   timeline (see above); deep links are `?photo=<id>` on both pages.
+
+- **`tags.html`** — the Flickr tag navigator. Entirely client-built by
+  `tags.js` from `window.flickrData`: ~8k chips (count-sorted, reusing the
+  cities `.city-chip` styling, in a scrollable `.tag-index`), a filter box,
+  and a progressive per-tag grid. Reuses `window.mmFlickrGridTile` (exposed
+  at top-level eval by `flickr-grid.js`, which otherwise no-ops here — no
+  `#flickrGrid`) so tile markup stays single-sourced, and sets
+  `window.mmFlickrOrder` to the selected tag's ids so the viewer's
+  prev/next cycles within the tag. Tag selection is hash-linkable
+  (`#tag=<encoded>`), written only on user selection like the cities page.
 
 - **`edit.html` + `edit-cities.html`** — the private tagging/favourites/city-text
   editor. **Loads no data files** — it embeds `window.cityTags` and renders tiles

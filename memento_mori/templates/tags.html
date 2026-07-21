@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Memento Mori - {{ username }}'s Instagram Archive</title>
+    <title>Memento Mori - {{ username }}'s Tags</title>
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
     {% if gtag_id %}
@@ -17,11 +17,15 @@
       gtag('config', '{{ gtag_id }}');
     </script>
     {% endif %}
-    <!-- Post data for the modal (shared file, loaded once and cached).
-         Deferred so the grid parses and paints without waiting on the data. -->
-    <script src="js/posts-data.js" defer></script>
-    <script src="js/modal.js" defer></script>
-    <!-- Leaflet powers the per-post location map in the modal; used on click, so deferred -->
+    <!-- Flickr data + shared tile builder + the tag navigator + viewer.
+         All deferred; defer preserves execution order and runs before
+         DOMContentLoaded. flickr-grid.js contributes only its exposed tile
+         builder here (there is no #flickrGrid on this page). -->
+    <script src="js/flickr-data.js" defer></script>
+    <script src="js/flickr-grid.js" defer></script>
+    <script src="js/tags.js" defer></script>
+    <script src="js/flickr-viewer.js" defer></script>
+    <!-- Leaflet powers the per-photo location map in the viewer; click-time use, so deferred -->
     <script src="vendor/leaflet/leaflet.js" defer></script>
   </head>
   <body>
@@ -44,7 +48,7 @@
           {% endif %}
           <div class="stats">
             <div class="stat">
-              <a href="index.html" class="nav-link active" aria-current="page">
+              <a href="index.html" class="nav-link">
                 <span class="stat-count" id="post-count">{{ post_count }}</span> posts
               </a>
             </div>
@@ -67,20 +71,16 @@
               </a>
             </div>
             {% endif %}
-            {% if has_flickr %}
             <div class="stat">
               <a href="flickr.html" class="nav-link">
                 <span class="stat-count" id="flickr-count">{{ flickr_count }}</span> photos
               </a>
             </div>
-            {% endif %}
-            {% if has_flickr_tags %}
             <div class="stat">
-              <a href="tags.html" class="nav-link">
+              <a href="tags.html" class="nav-link active" aria-current="page">
                 <span class="stat-count" id="tag-count">{{ flickr_tag_count }}</span> tags
               </a>
             </div>
-            {% endif %}
             {% if profile.follower_count is defined and profile.follower_count is not none %}
             <div class="stat">
               <span class="stat-count" id="follower-count">{{ profile.follower_count }}</span> followers
@@ -89,20 +89,22 @@
           </div>
         </div>
       </div>
-      <div class="sort-options">
-        <div class="sort-row">
-          <button type="button" class="sort-link active" data-sort="newest" aria-current="true">Newest</button>
-          <button type="button" class="sort-link" data-sort="oldest">Oldest</button>
-          <button type="button" class="sort-link" data-sort="random">Random</button>
-        </div>
-      </div>
-      <div class="posts-grid" id="postsGrid">
-        {{ grid_html|safe }}
+
+      <div class="tags-container">
+        <input type="search" id="tagFilter" class="tag-filter"
+               placeholder="Filter {{ flickr_tag_count }} tags…"
+               aria-label="Filter tags">
+        {# Chips are built client-side by tags.js from window.flickrData
+           (reusing the cities page's chip styling) #}
+        <nav class="city-index tag-index" id="tagIndex" aria-label="Tags"></nav>
+
+        <h2 class="timeline-day-header" id="tagTitle"></h2>
+        <div class="posts-grid" id="tagGrid"></div>
       </div>
     </main>
 
-    {% include "_post_modal.html" %}
-    
+    {% include "_flickr_viewer.html" %}
+
     <footer>
       <div class="footer-content">
         <p>Generated on {{ generation_date }} with <a href="https://github.com/greg-randall/memento-mori">Memento Mori</a>.</p>
