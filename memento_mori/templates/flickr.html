@@ -3,8 +3,9 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Memento Mori - {{ username }}'s Instagram Stories</title>
+    <title>Memento Mori - {{ username }}'s Flickr</title>
     <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
     {% if gtag_id %}
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id={{ gtag_id }}"></script>
@@ -16,11 +17,14 @@
       gtag('config', '{{ gtag_id }}');
     </script>
     {% endif %}
-    <!-- Stories data (shared file, loaded once and cached).
-         Deferred so the grid parses and paints without waiting on the data. -->
-    <script src="js/stories-data.js" defer></script>
-    <!-- Load stories.js only, modal.js is not needed on this page -->
-    <script src="js/stories.js" defer></script>
+    <!-- Flickr data + progressive grid + viewer. All deferred so the first
+         server-rendered tiles parse and paint without waiting on the data JS;
+         defer preserves execution order and runs before DOMContentLoaded. -->
+    <script src="js/flickr-data.js" defer></script>
+    <script src="js/flickr-grid.js" defer></script>
+    <script src="js/flickr-viewer.js" defer></script>
+    <!-- Leaflet powers the per-photo location map in the viewer; click-time use, so deferred -->
+    <script src="vendor/leaflet/leaflet.js" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -46,11 +50,13 @@
                 <span class="stat-count" id="post-count">{{ post_count }}</span> posts
               </a>
             </div>
+            {% if has_stories %}
             <div class="stat">
-              <a href="stories.html" class="nav-link active" aria-current="page">
+              <a href="stories.html" class="nav-link">
                 <span class="stat-count" id="story-count">{{ story_count }}</span> stories
               </a>
             </div>
+            {% endif %}
             <div class="stat">
               <a href="timeline.html" class="nav-link">
                 <span class="stat-count" id="day-count">{{ day_count }}</span> days
@@ -63,13 +69,11 @@
               </a>
             </div>
             {% endif %}
-            {% if has_flickr %}
             <div class="stat">
-              <a href="flickr.html" class="nav-link">
+              <a href="flickr.html" class="nav-link active" aria-current="page">
                 <span class="stat-count" id="flickr-count">{{ flickr_count }}</span> photos
               </a>
             </div>
-            {% endif %}
             {% if profile.follower_count is defined and profile.follower_count is not none %}
             <div class="stat">
               <span class="stat-count" id="follower-count">{{ profile.follower_count }}</span> followers
@@ -78,33 +82,34 @@
           </div>
         </div>
       </div>
-      
-      <div class="stories-container">
-        <h2 class="section-title">Stories</h2>
-        <div class="stories-grid">
-          {% for story in stories %}
-          <a class="story-item" data-index="{{ story.index }}" data-timestamp="{{ story.timestamp }}" href="stories.html?story={{ story.timestamp }}">
-            <div class="story-media">
-              {% if story.is_video %}
-              <div class="video-indicator">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
-                  <path d="M8 5v14l11-7z" fill="white"/>
-                </svg>
-              </div>
-              {% endif %}
-              <img src="{{ story.media }}" alt="{{ story.caption|default('Instagram Story') }}" {{ story.lazy_load|safe }} onerror="this.onerror=null; this.src='{{ story.original_media }}';">
-            </div>
-            <div class="story-info">
-              <div class="story-date">{{ story.date }}</div>
-            </div>
-          </a>
-          {% endfor %}
+      <div class="sort-options">
+        <div class="sort-row">
+          <button type="button" class="sort-link active" data-sort="newest" aria-current="true">Newest</button>
+          <button type="button" class="sort-link" data-sort="oldest">Oldest</button>
+          <button type="button" class="sort-link" data-sort="random">Random</button>
         </div>
+      </div>
+      {# Only the first chunk is server-rendered (all ~30k tiles would be a
+         ~7 MB page); flickr-grid.js appends the rest progressively from
+         window.flickrData. Tile markup parity: mmFlickrTile in
+         flickr-grid.js — change both together. #}
+      <div class="posts-grid" id="flickrGrid">
+        {% for item in flickr_tiles %}
+        <a class="grid-item flickr-tile" data-id="{{ item.id }}" href="{{ item.photopage }}">
+          <div class="tile-media">
+            <img src="{{ item.display_media }}" alt="Flickr photo"{{ item.lazy_load }}>
+            {% if item.is_video %}
+            <div class="video-indicator">▶ Video</div>
+            {% endif %}
+          </div>
+          <div class="tile-place">{{ item.title }}</div>
+        </a>
+        {% endfor %}
       </div>
     </main>
 
-    {% include "_story_viewer.html" %}
-    
+    {% include "_flickr_viewer.html" %}
+
     <footer>
       <div class="footer-content">
         <p>Generated on {{ generation_date }} with <a href="https://github.com/greg-randall/memento-mori">Memento Mori</a>.</p>

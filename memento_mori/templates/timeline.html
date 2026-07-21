@@ -22,9 +22,15 @@
          preserves execution order and runs before DOMContentLoaded. -->
     <script src="js/posts-data.js" defer></script>
     <script src="js/stories-data.js" defer></script>
+    {% if has_flickr %}
+    <script src="js/flickr-data.js" defer></script>
+    {% endif %}
     <script src="js/timeline-months.js" defer></script>
     <script src="js/modal.js" defer></script>
     <script src="js/stories.js" defer></script>
+    {% if has_flickr %}
+    <script src="js/flickr-viewer.js" defer></script>
+    {% endif %}
     <script src="js/month-nav.js" defer></script>
     <script src="js/on-this-day.js" defer></script>
     <!-- Leaflet powers the per-post location map in the modal; used on click, so deferred -->
@@ -70,6 +76,13 @@
             <div class="stat">
               <a href="cities.html" class="nav-link">
                 <span class="stat-count" id="city-count">{{ city_count }}</span> cities
+              </a>
+            </div>
+            {% endif %}
+            {% if has_flickr %}
+            <div class="stat">
+              <a href="flickr.html" class="nav-link">
+                <span class="stat-count" id="flickr-count">{{ flickr_count }}</span> photos
               </a>
             </div>
             {% endif %}
@@ -139,6 +152,22 @@
             {% endfor %}
           </div>
           {% endif %}
+          {% if day.flickr %}
+          <div class="timeline-row-label">Flickr photos and videos ({{ day.flickr_count }})</div>
+          <div class="timeline-posts">
+            {% for item in day.flickr %}
+            <a class="grid-item timeline-tile flickr-tile" data-id="{{ item.id }}" href="{{ item.photopage }}">
+              <div class="tile-media">
+                <img src="{{ item.display_media }}" alt="Flickr photo"{{ item.lazy_load }}>
+                {% if item.is_video %}
+                <div class="video-indicator">▶ Video</div>
+                {% endif %}
+              </div>
+              <div class="tile-place">{{ item.title }}</div>
+            </a>
+            {% endfor %}
+          </div>
+          {% endif %}
         </section>
         {% endfor %}
         </div>
@@ -151,6 +180,10 @@
     {% include "_post_modal.html" %}
 
     {% include "_story_viewer.html" %}
+
+    {% if has_flickr %}
+    {% include "_flickr_viewer.html" %}
+    {% endif %}
 
     <footer>
       <div class="footer-content">

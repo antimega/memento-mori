@@ -1,0 +1,24 @@
+    <!-- Flickr viewer: same structure and CSS classes as _post_modal.html,
+         own ids (no collisions if pages ever co-host viewers). Driven by
+         static/js/flickr-viewer.js. -->
+    <div class="post-modal" id="flickrModal" role="dialog" aria-modal="true" aria-label="Flickr photo" tabindex="-1">
+        <button type="button" class="close-modal icon-button" id="closeFlickr" aria-label="Close">✕</button>
+        <button type="button" class="modal-nav modal-prev icon-button" id="flickrPrev" aria-label="Previous photo">❮</button>
+        <button type="button" class="modal-nav modal-next icon-button" id="flickrNext" aria-label="Next photo">❯</button>
+        <div class="post-modal-content">
+            <div class="post-media" id="flickrMedia"></div>
+            <div class="post-info">
+                <div class="post-header">
+                    <div class="post-user-info">
+                        <div class="post-username" id="flickrTitle"></div>
+                    </div>
+                </div>
+                <div class="post-caption flickr-desc" id="flickrDesc"></div>
+                <div class="flickr-tags" id="flickrTags"></div>
+                <div class="flickr-albums" id="flickrAlbums"></div>
+                <div class="post-stats" id="flickrStats"></div>
+                <div class="post-map" id="flickrMap" aria-label="Map of photo location"></div>
+                <div class="post-date" id="flickrDate"></div>
+            </div>
+        </div>
+    </div>

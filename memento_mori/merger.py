@@ -36,6 +36,7 @@ def load_existing_site_data(output_dir, verbose=False):
             "stories": sidecar.get("stories", {}),
             "settings": sidecar.get("settings", {}),
             "profile": sidecar.get("profile"),
+            "flickr": sidecar.get("flickr"),
             "source": "sidecar",
         }
 
@@ -54,6 +55,7 @@ def load_existing_site_data(output_dir, verbose=False):
         "stories": stories,
         "settings": {},
         "profile": None,
+        "flickr": None,
         "source": "html",
     }
 

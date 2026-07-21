@@ -161,6 +161,9 @@ document.addEventListener('DOMContentLoaded', function () {
         document.addEventListener('click', function (e) {
             const item = e.target.closest('.grid-item');
             if (!item) return;
+            // Flickr tiles share the grid-item styling but belong to the
+            // flickr viewer (flickr-viewer.js's own delegated listener)
+            if (item.classList.contains('flickr-tile')) return;
             // On the timeline page tiles are links (no-JS fallback);
             // open the modal in place instead of navigating away
             if (item.tagName === 'A') {
