@@ -81,6 +81,13 @@
                 <span class="stat-count" id="tag-count">{{ flickr_tag_count }}</span> tags
               </a>
             </div>
+            {% if has_flickr_albums %}
+            <div class="stat">
+              <a href="albums.html" class="nav-link">
+                <span class="stat-count" id="album-count">{{ flickr_album_count }}</span> albums
+              </a>
+            </div>
+            {% endif %}
             {% if profile.follower_count is defined and profile.follower_count is not none %}
             <div class="stat">
               <span class="stat-count" id="follower-count">{{ profile.follower_count }}</span> followers
