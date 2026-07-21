@@ -219,6 +219,23 @@ FLICKR_API_KEY=yourkey python -m memento_mori.cli --regenerate --flickr ./flickr
 python3 -m http.server -d output
 ```
 
+### Running the tests
+
+```bash
+# unit + integration, inside the Docker image (no extra setup)
+docker compose run --rm --entrypoint python memento-mori -m pytest tests -q
+
+# or on your machine (needs libmagic: brew install libmagic / apt install libmagic1)
+pip install -e ".[test]"
+pytest -q
+```
+
+The suite builds small synthetic Instagram and Flickr exports and runs the real
+pipeline over them, so it needs no personal data and never touches the network.
+There is also an opt-in browser layer (`pip install -e ".[browser]" &&
+playwright install chromium && pytest -m browser`) and, if you have a generated
+site in `./output`, a set of consistency checks against it (`pytest -m real`).
+
 ### CLI arguments
 
 ```

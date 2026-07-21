@@ -19,6 +19,12 @@ COPY requirements.txt .
 # Install dependencies from requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
+# pytest so the core test suite can run inside the image:
+#   docker compose run --rm --entrypoint python memento-mori -m pytest tests
+# The browser layer (pytest-playwright) is deliberately NOT installed here —
+# it needs a real Chromium and runs on the host or in CI instead.
+RUN pip install --no-cache-dir pytest
+
 # Copy application code
 COPY . .
 

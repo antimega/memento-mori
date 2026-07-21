@@ -1,0 +1,149 @@
+"""
+Characterization against the maintainer's own generated site.
+
+Opt-in (`pytest -m real`) and auto-skipping, because it needs a real ./output
+that no checkout has. Synthetic fixtures prove the code paths work; this
+proves they work at real scale — 6k posts, 30k Flickr items, a decade of
+edge cases no fixture would think to invent.
+
+Deliberately generic: no hardcoded counts, only cross-consistency between
+artifacts that must agree. That way it keeps passing as the archive grows,
+and it is the tool for proving the multi-source schema migration lossless
+(run it before and after; the same invariants must hold).
+"""
+
+import json
+import re
+from pathlib import Path
+
+import pytest
+
+from tests.helpers import decode_browser_data, read_data_json
+
+OUTPUT = Path(__file__).resolve().parents[1] / "output"
+
+pytestmark = [
+    pytest.mark.real,
+    pytest.mark.skipif(
+        not (OUTPUT / "data.json").exists(),
+        reason="no generated site at ./output — run a build first",
+    ),
+]
+
+
+@pytest.fixture(scope="module")
+def data():
+    return read_data_json(OUTPUT)
+
+
+def test_sidecar_and_browser_posts_agree(data):
+    posts = decode_browser_data(OUTPUT / "js/posts-data.js", "postData")
+    assert len(posts) == len(data["posts"])
+    assert set(posts) == {str(k) for k in data["posts"]}
+
+
+def test_sidecar_and_browser_stories_agree(data):
+    if not data.get("stories"):
+        pytest.skip("no stories in this archive")
+    stories = decode_browser_data(OUTPUT / "js/stories-data.js", "storiesData")
+    assert len(stories) == len(data["stories"])
+
+
+def test_sidecar_and_browser_flickr_agree(data):
+    if not (data.get("flickr") or {}).get("items"):
+        pytest.skip("no Flickr section in this archive")
+    items = decode_browser_data(OUTPUT / "js/flickr-data.js", "flickrData")
+    assert len(items) == len(data["flickr"]["items"])
+    assert set(items) == set(data["flickr"]["items"])
+
+
+def test_nav_counts_match_the_data(data):
+    """
+    The rendered navigation is the user-visible claim about how much is
+    here. It must agree with the data, thousands separators and all.
+    """
+    html = (OUTPUT / "index.html").read_text(encoding="utf-8")
+    expected = f"{len(data['posts']):,}"
+    assert re.search(
+        rf'<span class="stat-count">{re.escape(expected)}</span>\s*posts', html
+    ), f"nav does not report {expected} posts"
+
+    if (data.get("flickr") or {}).get("items"):
+        expected = f"{len(data['flickr']['items']):,}"
+        assert re.search(
+            rf'<span class="stat-count">{re.escape(expected)}</span>\s*photos', html
+        ), f"nav does not report {expected} photos"
+
+
+def test_no_browser_only_fields_in_the_sidecar(data):
+    for section in ("posts", "stories"):
+        for key, entry in (data.get(section) or {}).items():
+            assert not ({"th", "dm", "vp"} & set(entry)), f"{section}[{key}]"
+    for key, entry in ((data.get("flickr") or {}).get("items") or {}).items():
+        assert not ({"th", "dm", "vp"} & set(entry)), f"flickr[{key}]"
+
+
+def test_every_flickr_item_has_media(data):
+    items = (data.get("flickr") or {}).get("items") or {}
+    if not items:
+        pytest.skip("no Flickr section")
+    missing = [k for k, v in items.items() if not v.get("m")]
+    assert not missing, f"{len(missing)} Flickr items without media: {missing[:5]}"
+
+
+def test_no_privacy_strings_serialized(data):
+    """A Flickr privacy value in the output means the filter leaked."""
+    blob = json.dumps(data.get("flickr") or {})
+    assert '"privacy"' not in blob
+    assert "friends & family" not in blob
+
+
+def test_thumbnails_resolve(data):
+    """Sampled: every th must name a file that exists."""
+    posts = decode_browser_data(OUTPUT / "js/posts-data.js", "postData")
+    checked = 0
+    for key, entry in posts.items():
+        th = entry.get("th")
+        if not th:
+            continue
+        assert (OUTPUT / "thumbnails" / f"{th}.webp").exists(), f"{key} -> {th}"
+        checked += 1
+        if checked >= 200:
+            break
+    assert checked, "no th fields found to verify"
+
+
+def test_media_referenced_by_the_sidecar_resolves(data):
+    """
+    Sampled across posts and Flickr: every media reference must resolve to a
+    file on disk.
+
+    Note what "resolve" means. `m` holds the *logical* reference, which keeps
+    the source extension (media/posts/abc.jpg) while the pipeline writes a
+    converted sibling (abc.webp) next to it; _get_display_media does that
+    substitution at render time. So an `m` entry pointing at a .jpg that does
+    not exist is normal and correct — what would be broken is neither the
+    literal path nor its .webp sibling existing.
+    """
+    missing = []
+    sources = list((data.get("posts") or {}).items())[:100]
+    sources += list(((data.get("flickr") or {}).get("items") or {}).items())[:100]
+    for key, entry in sources:
+        for m in entry.get("m", []):
+            if not m:
+                continue
+            webp = re.sub(r"\.(jpg|jpeg|png|gif)$", ".webp", m, flags=re.I)
+            if not ((OUTPUT / m).exists() or (OUTPUT / webp).exists()):
+                missing.append((key, m))
+    assert not missing, f"{len(missing)} unresolvable media refs, e.g. {missing[:3]}"
+
+
+def test_timeline_server_renders_exactly_one_month():
+    html = (OUTPUT / "timeline.html").read_text(encoding="utf-8")
+    assert html.count('class="timeline-month"') == 1
+    assert html.count("<option") > 1
+
+
+def test_pages_carry_no_inline_style_blocks():
+    for page in OUTPUT.glob("*.html"):
+        assert "<style" not in page.read_text(encoding="utf-8"), page.name

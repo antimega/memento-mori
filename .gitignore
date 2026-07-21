@@ -29,3 +29,6 @@ comments-test/.env
 comments-test/instagram_cookies.json
 comments-test/runs/
 comments-test/
+.venv-test/
+memento_mori.egg-info/
+*.egg-info/
