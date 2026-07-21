@@ -1,6 +1,8 @@
-# Memento Mori - Instagram Archive Viewer
+# Memento Mori - Instagram and Flickr Archive Viewer
 
 **Memento Mori** is a tool that converts your Instagram data export into a beautiful, standalone viewer that resembles the Instagram interface. The name "Memento Mori" (Latin for "remember that you will die") reflects the ephemeral nature of our digital content. You can see an example at https://gregr.org/instagram/.
+
+It now adds Flickr importing as well, with a separate photos page and a merged timeline page.
 
 
 ## Quick Start
