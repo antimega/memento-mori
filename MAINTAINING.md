@@ -694,13 +694,17 @@ verify each. Keep the viewport fixed between captures.
   non-existent clamp. Click something already in the viewport
   (`_click_tile_in_viewport` in the browser tests).
 
-- **Selection state must not be carried by fading.** In the Flickr city
-  editor every tile starts selected, so the *deselected* state is the one
-  you read across a grid of hundreds — and you have to be able to see what
-  you are excluding. Dimming to `opacity: 0.35` made excluded photos almost
-  invisible. State is now grayscale + an explicit tick (top-right; `.fav-badge`
-  owns top-left and `.city-badge` bottom-left), with hover restoring full
-  colour so you can inspect a tile. A browser test pins the legibility floor.
+- **Selection state is carried by the tick alone.** In the Flickr city
+  editor every tile starts selected, so the *deselected* state is the one you
+  read across a grid of hundreds — and you have to be able to see the photos
+  you are excluding. The images are therefore left completely untouched (no
+  fade, no desaturation) and only the corner tick changes: filled blue when
+  selected, an empty ring when not. It sits top-right, the only free corner
+  (`.fav-badge` owns top-left, `.city-badge` bottom-left). Two earlier
+  attempts are worth not repeating — `opacity: 0.35` made excluded photos
+  nearly invisible, and a grayscale filter turned the grid into a state map
+  rather than a set of photographs. A browser test pins both halves: the
+  image untouched, the ticks distinct.
 
 **Flickr-specific gotchas:**
 

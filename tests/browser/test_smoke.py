@@ -670,15 +670,15 @@ def test_flickr_editor_bulk_favourites(page, base_url):
     )
 
 
-def test_deselected_tiles_stay_clearly_visible(page, base_url):
+def test_selection_state_is_carried_only_by_the_tick(page, base_url):
     """
-    A deselected tile must still be easy to look at.
+    The tick is the sole distinction between selected and deselected.
 
-    You are deciding which photos to exclude, so you have to be able to SEE
-    the ones you are excluding. An earlier version dimmed them to opacity
-    0.35, which made them nearly invisible; the state is now carried by
-    desaturation plus an explicit tick, not by fading. This pins the
-    legibility floor and the fact that the two states differ visibly.
+    The photos themselves must be left completely alone — full colour, full
+    opacity — so the grid reads as photographs rather than as a UI state map.
+    An earlier version dimmed deselected tiles to opacity 0.35, which made the
+    photos you were choosing to exclude almost impossible to see. This pins
+    both halves: the image is untouched, and the tick still differs.
     """
     page.goto(f"{base_url}/edit-flickr.html")
     page.locator("#tagIndex .city-chip").first.wait_for(timeout=5000)
@@ -688,31 +688,36 @@ def test_deselected_tiles_stay_clearly_visible(page, base_url):
     tiles = page.locator("#flickrEditGrid .grid-item")
     assert tiles.count() > 1, "need at least two tiles"
     tiles.first.click()          # deselect exactly one
-    # Move the pointer away: hovering a tile deliberately restores full
-    # colour so you can inspect what you are excluding, which would
-    # otherwise be what this measures.
-    page.mouse.move(0, 0)
+    page.mouse.move(0, 0)        # hover would mask a difference either way
     page.wait_for_timeout(250)
 
     state = page.evaluate("""() => {
         const off = document.querySelector('#flickrEditGrid .grid-item.deselected');
         const on = document.querySelector('#flickrEditGrid .grid-item:not(.deselected)');
         const tick = el => getComputedStyle(el.querySelector('.tile-media'), '::after');
+        const cs = el => getComputedStyle(el);
         return {
-            offOpacity: parseFloat(getComputedStyle(off).opacity),
-            offFilter: getComputedStyle(off).filter,
+            offOpacity: parseFloat(cs(off).opacity),
+            offFilter: cs(off).filter,
+            offImgFilter: cs(off.querySelector('img')).filter,
             offTick: tick(off).content,
             onTick: tick(on).content,
-            offOutline: tick(on).outlineColor !== getComputedStyle(
-                off.querySelector('.tile-media')).outlineColor,
+            offTickBg: tick(off).backgroundColor,
+            onTickBg: tick(on).backgroundColor,
         };
     }""")
 
-    assert state["offOpacity"] >= 0.6, (
-        f"deselected tiles are too faint to read (opacity {state['offOpacity']})"
+    # the photo is untouched
+    assert state["offOpacity"] == 1, (
+        f"deselected tiles are faded (opacity {state['offOpacity']}) — the "
+        "photo must stay fully legible"
     )
-    assert state["offFilter"] != "none", "no desaturation to distinguish the state"
-    assert state["offTick"] != state["onTick"], (
-        "selected and deselected tiles show the same tick — state is invisible"
-    )
-    assert state["offOutline"], "selection frame does not change with state"
+    for key in ("offFilter", "offImgFilter"):
+        assert state[key] == "none", (
+            f"deselected tiles carry a filter ({state[key]}) — the tick alone "
+            "should distinguish the state"
+        )
+
+    # ...and the tick still tells the two apart
+    assert state["offTick"] != state["onTick"], "both ticks show the same glyph"
+    assert state["offTickBg"] != state["onTickBg"], "both ticks share a fill"

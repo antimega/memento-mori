@@ -1412,62 +1412,38 @@ a.story-item {
 
 #flickrEditGrid .grid-item {
   cursor: pointer;
-  transition: filter 0.15s ease, opacity 0.15s ease;
 }
 
-/* Frame the photo, not the whole tile — an outline on .grid-item also boxes
-   the caption underneath, which reads as a stray border. */
-#flickrEditGrid .tile-media {
-  outline: 3px solid #0095f6;
-  outline-offset: -3px;
-  border-radius: 4px;
-}
-
-/* An explicit tick, so state is never carried by contrast alone. Top-right
-   is the free corner — .fav-badge owns top-left, .city-badge bottom-left. */
+/* The tick is the ONLY thing that distinguishes selected from deselected:
+   the photos themselves stay untouched — full colour, full opacity — so the
+   grid reads as photographs rather than as a UI state map. It therefore has
+   to hold up against any image: white ring, dark outer edge, both states
+   the same size and position so only the fill changes. */
 #flickrEditGrid .tile-media::after {
   content: '✓';
   position: absolute;
   top: 6px;
   right: 6px;
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1;
   background: #0095f6;
   color: #fff;
   border: 2px solid #fff;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
   pointer-events: none;
   z-index: 3;
 }
 
-/* Deselected tiles must stay legible — you are deciding what to exclude, so
-   you have to be able to see it. Colour does the distinguishing work
-   (grayscale against a grid of colour reads instantly), NOT fading: an
-   earlier opacity:0.35 made excluded photos almost impossible to make out. */
-#flickrEditGrid .grid-item.deselected {
-  filter: grayscale(1);
-  opacity: 0.8;
-}
-
-#flickrEditGrid .grid-item.deselected .tile-media {
-  outline-color: transparent;
-}
-
 #flickrEditGrid .grid-item.deselected .tile-media::after {
-  content: '';                 /* empty ring: excluded, still clearly marked */
-  background: rgba(0, 0, 0, 0.35);
+  content: '';                 /* empty ring: excluded, nothing else changes */
+  background: rgba(0, 0, 0, 0.4);
   border-color: rgba(255, 255, 255, 0.95);
-}
-
-#flickrEditGrid .grid-item:hover {
-  filter: none;
-  opacity: 1;
 }
 
 /* Map page: one clustered map of every geotagged item, with the selected
@@ -2007,8 +1983,7 @@ body.fav-mode .editor-grid .timeline-story-tile {
   .slideshow-dot,
   .sort-link,
   .nav-link,
-  .share-button,
-  #flickrEditGrid .grid-item {
+  .share-button {
     transition: none !important;
   }
 
