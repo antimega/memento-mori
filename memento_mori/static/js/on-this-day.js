@@ -70,6 +70,13 @@ document.addEventListener('DOMContentLoaded', function () {
             strip: ['grid-item', 'flickr-tile'],
             add: ['otd-tile'],
             open: function (tile, key) {
+                // Scope the viewer's prev/next to the memories on screen,
+                // the same way the tag and album pages do. Without this the
+                // viewer falls back to "the visible month panel's tiles",
+                // and an On This Day item is from a previous year by
+                // definition — never in that panel — so the arrows did
+                // nothing at all.
+                window.mmFlickrOrder = flickrOrder();
                 // No mmEnsureMonthFor here: openFlickr resolves and builds
                 // its own month via mmMonthKeyOfTarget/mmBuildMonth.
                 if (window.mmOpenFlickr) window.mmOpenFlickr(key);
@@ -116,6 +123,18 @@ document.addEventListener('DOMContentLoaded', function () {
     var years = Object.keys(byYear).map(Number).sort(function (a, b) { return b - a; });
     if (total) {
         btnOnThisDay.textContent = 'On this day (' + total.toLocaleString() + ')';
+    }
+
+    function flickrOrder() {
+        // Every Flickr memory currently shown, newest year first and newest
+        // within each year — i.e. the order they appear on the page.
+        var ids = [];
+        years.forEach(function (year) {
+            (byYear[year].flickr || []).forEach(function (item) {
+                ids.push(item.key);
+            });
+        });
+        return ids;
     }
 
     function buildTile(provider, item) {
@@ -181,7 +200,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // View toggle
     function showView(onThisDay) {
-        if (onThisDay) buildView();
+        if (onThisDay) {
+            buildView();
+        } else {
+            // Hand Flickr navigation back to the timeline, which walks the
+            // visible month panel. Leaving our order in place would keep
+            // prev/next cycling the memories after the user had left them.
+            window.mmFlickrOrder = null;
+        }
         container.hidden = !onThisDay;
         if (monthNav) monthNav.hidden = onThisDay;
         if (timeline) timeline.hidden = onThisDay;

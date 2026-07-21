@@ -621,6 +621,18 @@ verify each. Keep the viewport fixed between captures.
 - **GitHub auth isn't available in this environment** — commits/pushes are done
   by the maintainer, not the tooling.
 
+- **Safari does not focus a link when you click it; Chromium does.** So a
+  viewer's `lastFocused` is often an ancestor (`<main tabindex="-1">`), and
+  restoring focus to it on close scrolls that element into view — throwing
+  the reader from the bottom of the page to the top. All three viewers use
+  `focus({ preventScroll: true })` for this reason. It reproduces **only**
+  in WebKit, which is why the browser CI job runs both engines.
+- **Playwright scrolls an element into view before clicking it.** A test that
+  scrolls down and then clicks an arbitrary tile moves the page itself, which
+  looks exactly like a scroll bug — it sent one investigation chasing a
+  non-existent clamp. Click something already in the viewport
+  (`_click_tile_in_viewport` in the browser tests).
+
 **Flickr-specific gotchas:**
 
 - **Flickr geo is degrees × 1,000,000 as integer strings** (`"51561666"` →
@@ -670,6 +682,11 @@ verify each. Keep the viewport fixed between captures.
   the **same absolute path**, or it dangles inside the container (zips
   read-only, cache writable). Imports then require the disk connected;
   browsing the generated site never does.
+- **On This Day scopes Flickr prev/next via `window.mmFlickrOrder`.** The
+  viewer's fallback order is "the visible month panel's tiles", and an On
+  This Day item is from a previous year by definition — never in that panel —
+  so without setting the order the arrows silently do nothing. `showView`
+  clears it again when returning to the timeline.
 - **The flickr tile markup lives in FOUR places** — `templates/flickr.html`
   (grid) + `buildTile` in `flickr-grid.js`, and `templates/timeline.html`
   (timeline row) + `flickrTimelineTile` in `timeline-months.js` (the

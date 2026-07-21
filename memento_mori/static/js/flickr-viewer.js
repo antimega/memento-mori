@@ -268,7 +268,13 @@ document.addEventListener('DOMContentLoaded', function () {
         setBackgroundInert(false);
         updateUrl(null);
         if (lastFocused && typeof lastFocused.focus === 'function') {
-            lastFocused.focus();
+            // Restore focus without scrolling. Safari/WebKit does not focus an <a>
+            // when it is clicked, so lastFocused is often an ancestor such as
+            // <main tabindex="-1"> — and focusing that scrolls it into view,
+            // throwing the reader from wherever they were back to the top of
+            // the page. Chromium focuses the link itself, which is why this
+            // only ever showed up in Safari.
+            lastFocused.focus({ preventScroll: true });
         }
     }
 

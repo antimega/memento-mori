@@ -289,7 +289,7 @@ def _photo_json(pid, taken, privacy="public", name="", description="",
 
 
 def make_flickr_export(root, with_media=True, with_zip=True, exclude_ids=(),
-                       otd_date=None):
+                       otd_date=None, filler=0):
     """
     Build a Flickr export: metadata for public + non-public items, albums,
     account profile, and local media in both a folder and a zip part.
@@ -320,6 +320,12 @@ def make_flickr_export(root, with_media=True, with_zip=True, exclude_ids=(),
     # Callers testing "On this day" pass a date on today's calendar day in a
     # previous year, so the view always has a Flickr memory to show.
     plain_taken = otd_date or taken
+    # ...and a second one a year earlier, since navigating between memories
+    # needs at least two of them.
+    otd_taken_2 = None
+    if otd_date:
+        y, rest = otd_date.split("-", 1)
+        otd_taken_2 = f"{int(y) - 1}-{rest}"
 
     records = {
         ids["plain"]: _photo_json(
@@ -328,7 +334,7 @@ def make_flickr_export(root, with_media=True, with_zip=True, exclude_ids=(),
             tags=["holiday", "beach"], albums=[7001], license_="All Rights Reserved",
         ),
         ids["geo"]: _photo_json(
-            ids["geo"], "2018-06-03 09:00:00", name="Geotagged",
+            ids["geo"], otd_taken_2 or "2018-06-03 09:00:00", name="Geotagged",
             geo=(22.285000, 114.152166), tags=["hongkong"], albums=[7001],
             license_="Attribution License",
         ),
@@ -348,6 +354,18 @@ def make_flickr_export(root, with_media=True, with_zip=True, exclude_ids=(),
             ids["friends"], "2018-06-09 03:00:00", privacy="friends & family",
             name="SECRETFRIENDS"),
     }
+    # Optional filler items. Some bugs only appear on a page long enough to
+    # scroll a long way — notably the body overflow:hidden scroll clamp,
+    # which a short fixture cannot reproduce at all.
+    filler_ids = []
+    for n in range(filler):
+        pid = 52000000000 + n
+        filler_ids.append(pid)
+        records[pid] = _photo_json(
+            pid, f"2017-{(n % 12) + 1:02d}-{(n % 27) + 1:02d} 12:00:00",
+            name=f"Filler {n}", tags=["filler"],
+        )
+
     for pid, doc in records.items():
         (meta / f"photo_{pid}.json").write_text(json.dumps(doc), encoding="utf-8")
 
@@ -383,6 +401,8 @@ def make_flickr_export(root, with_media=True, with_zip=True, exclude_ids=(),
         copy_tiny_video(part / f"a-video_{ids['video']}.mp4")
         # untitled pattern: ^<id>_<10 hex>_o.<ext>
         write_jpeg(part / f"{ids['untitled']}_0123456789_o.jpg")
+        for pid in filler_ids:
+            write_jpeg(part / f"filler_{pid}_o.jpg", color=(120, 120, 120))
 
     if with_zip:
         # A real zip part, left un-extracted exactly as Flickr serves it.
@@ -397,7 +417,8 @@ def make_flickr_export(root, with_media=True, with_zip=True, exclude_ids=(),
             "exclude": {str(i): "test fixture exclusion" for i in exclude_ids}
         }), encoding="utf-8")
 
-    return {"ids": ids, "taken": taken, "collide_taken": collide_taken}
+    return {"ids": ids, "taken": taken, "collide_taken": collide_taken,
+            "filler_ids": filler_ids}
 
 
 def write_api_cache(root, video_ids=(), photo_ids=()):
