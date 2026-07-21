@@ -1,0 +1,63 @@
+name: tests
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  python-tests:
+    name: python (unit + integration)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          # Matches the Docker image (python:3.10-slim), which is where the
+          # app actually runs.
+          python-version: "3.10"
+          cache: pip
+
+      # python-magic needs libmagic; Pillow/opencv need the image libs.
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libmagic1 libgl1 libglib2.0-0
+
+      - name: Install package
+        run: pip install -e ".[test]"
+
+      - name: Run tests
+        run: pytest -q
+
+  browser-tests:
+    name: browser (playwright smoke)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libmagic1 libgl1 libglib2.0-0
+
+      - name: Install package
+        run: pip install -e ".[browser]"
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
+
+      - name: Install Chromium
+        run: playwright install --with-deps chromium
+
+      - name: Run browser smoke tests
+        run: pytest -m browser -q

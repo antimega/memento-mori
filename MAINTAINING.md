@@ -395,11 +395,56 @@ and by inter-tag whitespace — both harmless. Post tiles are otherwise identica
 
 ---
 
-## 7. What to test (regeneration → serve `output/` over http AND check file://)
+## 7. What to test
+
+### 7a. The automated suite (run this first)
+
+```bash
+# unit + integration (fast, offline, no personal data) — inside the image
+docker compose run --rm --entrypoint python memento-mori -m pytest tests -q
+
+# same, on a host: needs libmagic (brew install libmagic / apt install libmagic1)
+pip install -e ".[test]" && pytest -q
+
+# browser smokes: real Chromium, host or CI only (not in the image)
+pip install -e ".[browser]" && playwright install chromium && pytest -m browser -q
+
+# characterization against YOUR real ./output (auto-skips without one)
+pytest -m real -q
+```
+
+GitHub Actions runs the first and third of these on every push and PR
+(`.github/workflows/tests.yml`). The `browser` and `real` markers are
+deselected by default (see `pyproject.toml`) because each needs something a
+plain checkout lacks.
+
+**How the suite is built** (`tests/`):
+- Fixtures are **generated in code**, not committed — the pipeline genuinely
+  decodes what it is handed (PIL opens every image, cv2 every video), and
+  generating them keeps personal data out of the repo. The only committed
+  binary is `tests/fixtures/tiny.mp4`.
+- **Every fixture is copied per test.** Folder-mode extraction rewrites the
+  export in place (`fix_file_extensions`), and the Flickr importer writes
+  `flickr_exclude.json` / `flickr_dedup_report.json` / `originals-cache/`
+  into its own *input* directory. Inputs are outputs here.
+- Tests stay **offline**: the API sweep only fires with a key AND no cache, and
+  `download_missing` fetches nothing when every item has local media. A
+  generated `flickr_api_cache.json` stands in for the sweep.
+- `--regenerate` **idempotence** is the strongest single guard: two builds must
+  match byte for byte across all output files, with only the three date stamps
+  masked (`tests/helpers.py:DATE_PATTERNS`).
+- When adding a test, **check it fails** against a deliberate break. A tags
+  deep-link test passed against a broken handler because navigating hash-to-hash
+  on the same page fires `hashchange`, not the initial-load path — hence the
+  separate `test_tags_deep_link_on_a_cold_load`.
+
+### 7b. Manual checks (what the suite does not cover)
 
 Regenerate, then `python3 -m http.server` in `output/`. The in-app browser pane
 caches assets aggressively — **serve on a fresh port** (or cache-bust) after a
-CSS/JS change or you'll test stale files.
+CSS/JS change or you'll test stale files. The editor's localStorage round-trip,
+visual/CSS regressions, and the network paths (API sweep, CDN downloader
+pacing) are all still manual.
 
 **Artifacts.** Reference sizes for the current archive (6,283 posts / 30,335
 flickr items): `timeline.html` ~69 KB with exactly one `.timeline-month` div

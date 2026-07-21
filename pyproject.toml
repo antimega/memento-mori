@@ -38,6 +38,14 @@ markers = [
     "browser: end-to-end smoke tests driving a real browser (needs pytest-playwright)",
     "real: characterization tests against the maintainer's real ./output site",
 ]
+filterwarnings = [
+    # The app uses datetime.utcfromtimestamp throughout, which Python 3.12+
+    # deprecates. The Docker image is 3.10 so this only fires on newer hosts,
+    # and it drowns real output (~300 warnings per browser run). Silenced
+    # here rather than fixed: swapping to timezone-aware datetimes touches
+    # every day/month grouping in the app and deserves its own change.
+    "ignore:datetime.datetime.utcfromtimestamp\\(\\) is deprecated:DeprecationWarning",
+]
 
 [project.scripts]
 memento-mori = "memento_mori.cli:main"
