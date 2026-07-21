@@ -10,19 +10,18 @@
 //
 // IMPORTANT: tile markup here must stay in step with the flickr tile in
 // templates/flickr.html (classes, data-id, href, indicator, .tile-place).
-document.addEventListener('DOMContentLoaded', function () {
-    var grid = document.getElementById('flickrGrid');
-    if (!grid || !window.flickrData) return;
 
-    var BATCH = 300;
-
+// Grid-style flickr tile builder, shared with the tags page (tags.js) so
+// the markup lives in one place. Defined at top-level eval — deferred
+// scripts all run before DOMContentLoaded, in order.
+(function () {
     function photopage(id) {
         var alias = (window.flickrMeta && window.flickrMeta.path_alias) || '';
         return 'https://www.flickr.com/photos/' + alias + '/' + id + '/';
     }
 
     // Parity target: the flickr tile in templates/flickr.html
-    function buildTile(id, entry) {
+    window.mmFlickrGridTile = function (id, entry) {
         var a = document.createElement('a');
         a.className = 'grid-item flickr-tile';
         a.setAttribute('data-id', id);
@@ -51,7 +50,15 @@ document.addEventListener('DOMContentLoaded', function () {
         place.textContent = entry.tt || '';   // user data — never innerHTML
         a.appendChild(place);
         return a;
-    }
+    };
+})();
+
+document.addEventListener('DOMContentLoaded', function () {
+    var grid = document.getElementById('flickrGrid');
+    if (!grid || !window.flickrData) return;
+
+    var BATCH = 300;
+    var buildTile = window.mmFlickrGridTile;
 
     // Newest-first order = the stable import index i
     var newestFirst = Object.keys(window.flickrData).sort(function (a, b) {

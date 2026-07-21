@@ -196,6 +196,7 @@ class InstagramSiteGenerator:
             if (self.data_package.get("flickr") or {}).get("items"):
                 self._write_flickr_browser_data()
                 self._generate_flickr_html()
+                self._generate_tags_html()
 
             # Generate the cities page when anything is tagged
             if self.cities:
@@ -363,6 +364,8 @@ class InstagramSiteGenerator:
             city_count=len(self.cities),
             has_flickr=self._page_context()["has_flickr"],
             flickr_count=self._page_context()["flickr_count"],
+            has_flickr_tags=self._page_context()["has_flickr_tags"],
+            flickr_tag_count=self._page_context()["flickr_tag_count"],
             grid_html=grid_html,
             generation_date=generation_date,
             gtag_id=self.gtag_id,  # Add Google tag ID
@@ -539,6 +542,8 @@ class InstagramSiteGenerator:
             city_count=len(self.cities),
             has_flickr=self._page_context()["has_flickr"],
             flickr_count=self._page_context()["flickr_count"],
+            has_flickr_tags=self._page_context()["has_flickr_tags"],
+            flickr_tag_count=self._page_context()["flickr_tag_count"],
             stories=stories_list,
             generation_date=generation_date,
             gtag_id=self.gtag_id,
@@ -677,6 +682,9 @@ class InstagramSiteGenerator:
         story_count = self.data_package.get("story_count", 0)
         cities = getattr(self, "cities", {}) or {}
         flickr_items = (self.data_package.get("flickr") or {}).get("items") or {}
+        flickr_tags = set()
+        for entry in flickr_items.values():
+            flickr_tags.update(entry.get("tg") or [])
         return {
             "username": profile_info["username"],
             "bio": profile_info.get("bio", ""),
@@ -690,6 +698,8 @@ class InstagramSiteGenerator:
             "city_count": len(cities),
             "has_flickr": bool(flickr_items),
             "flickr_count": len(flickr_items),
+            "has_flickr_tags": bool(flickr_tags),
+            "flickr_tag_count": len(flickr_tags),
             "generation_date": datetime.datetime.now().strftime("%Y-%m-%d"),
             "gtag_id": self.gtag_id,
         }
@@ -800,6 +810,22 @@ class InstagramSiteGenerator:
         with open(self.output_dir / "flickr.html", "w", encoding="utf-8") as f:
             f.write(_minify_html(html_content))
         print(f"Generated flickr HTML file: {self.output_dir / 'flickr.html'}")
+
+    def _generate_tags_html(self):
+        """
+        Generate tags.html: the Flickr tag navigator. The chips and per-tag
+        grids are built entirely client-side by tags.js from
+        window.flickrData, so this only renders the page shell.
+        """
+        ctx = self._page_context()
+        if not ctx["has_flickr_tags"]:
+            print("No Flickr tags found; skipping tags.html")
+            return
+        template = self.jinja_env.get_template("tags.html")
+        html_content = template.render(**ctx)
+        with open(self.output_dir / "tags.html", "w", encoding="utf-8") as f:
+            f.write(_minify_html(html_content))
+        print(f"Generated tags HTML file: {self.output_dir / 'tags.html'}")
 
     def _write_flickr_browser_data(self):
         """

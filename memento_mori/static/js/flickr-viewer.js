@@ -167,12 +167,21 @@ document.addEventListener('DOMContentLoaded', function () {
         descEl.textContent = entry.ds || '';
         descEl.style.display = entry.ds ? 'block' : 'none';
 
-        // Tag chips (user data — createElement/textContent only)
+        // Tag chips — each links to the tag navigator opened on that tag
+        // (user data — createElement/textContent only)
         tagsEl.innerHTML = '';
         (entry.tg || []).forEach(function (tag) {
-            var chip = document.createElement('span');
+            var chip = document.createElement('a');
             chip.className = 'flickr-tag';
             chip.textContent = tag;
+            chip.href = 'tags.html#tag=' + encodeURIComponent(tag);
+            chip.addEventListener('click', function () {
+                // On the tags page this is a same-document hash change (no
+                // reload): close the viewer and let tags.js's hashchange
+                // handler switch the tag. On other pages the navigation
+                // replaces the document anyway.
+                closeFlickr();
+            });
             tagsEl.appendChild(chip);
         });
         tagsEl.style.display = (entry.tg || []).length ? 'flex' : 'none';

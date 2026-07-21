@@ -345,6 +345,29 @@ main {
   z-index: 0; /* keep Leaflet panes under the modal controls */
 }
 
+/* Tags page: filter box above the (reused) city-chip index */
+.tags-container {
+  margin-top: 30px;
+}
+
+.tag-filter {
+  display: block;
+  width: 100%;
+  max-width: 340px;
+  margin: 0 0 16px;
+  padding: 8px 12px;
+  font: inherit;
+  border: 1px solid var(--instagram-border, #dbdbdb);
+  border-radius: 8px;
+}
+
+/* With ~8k chips the index needs a bounded, scrollable area */
+.tag-index {
+  max-height: 40vh;
+  overflow-y: auto;
+  align-content: flex-start;
+}
+
 /* Flickr viewer extras (tags, albums, description, backlink) */
 .flickr-desc {
   white-space: pre-line; /* descriptions are plain text with newlines */
@@ -363,6 +386,11 @@ main {
   padding: 2px 10px;
   font-size: 12px;
   color: #262626;
+  text-decoration: none; /* chips are links to the tag navigator */
+}
+
+.flickr-tag:hover {
+  background-color: #e2e2e2;
 }
 
 .flickr-albums {
