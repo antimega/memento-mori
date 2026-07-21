@@ -449,6 +449,16 @@ and by inter-tag whitespace — both harmless. Post tiles are otherwise identica
   one place and all three must follow. The header is deliberately **static**,
   not fixed — it now holds the bio, which a fixed header would pin to the
   viewport forever. (The old `--header-height` variable is gone.)
+- **The nav's mobile breakpoint is measured, not conventional (800px).** The
+  desktop nav is a `max-content` grid, so it has ONE intrinsic width (~750px
+  for the reference archive, driven by the longest service label). Below
+  that plus `main`'s padding, it overflows and the page scrolls sideways. The
+  stacked layout therefore has to take over *above* that width — a
+  conventional 768px would still leave a broken sliver, and the original
+  600px left a 171px dead zone where the nav was simply cut off. A longer
+  username or date range widens the label column: raise the breakpoint to
+  match. The browser tests sweep 320-1200px asserting no horizontal scroll
+  and no nav clipping, so a new dead zone fails CI rather than shipping.
 - **The three-row nav is one CSS grid.** `.nav-rows` is
   `grid-template-columns: repeat(4, max-content)`; each `.nav-row` is
   `display: contents` so its cells join the *parent* grid — that's what makes

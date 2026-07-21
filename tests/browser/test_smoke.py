@@ -493,3 +493,66 @@ def test_map_cluster_dblclick_zooms_in(page, base_url):
     assert (after != counts) or lone, (
         f"double-click did not drill in: {counts} -> {after}"
     )
+
+
+# --------------------------------------------------------------------------
+# responsive layout
+# --------------------------------------------------------------------------
+
+@pytest.mark.parametrize("path", ["index.html", "timeline.html", "flickr.html",
+                                  "tags.html", "map.html", "cities.html"])
+def test_no_horizontal_scroll_at_any_width(page, base_url, site, path):
+    """
+    Sweep the responsive range and assert the page never scrolls sideways.
+
+    This is deliberately generic — it asserts a property, not a breakpoint.
+    The nav's desktop layout is a max-content grid with one intrinsic width,
+    so if that width ever exceeds the point where the stacked layout takes
+    over, a dead zone opens where the nav is simply cut off. That is exactly
+    what happened with a 600px breakpoint against a ~771px nav, and a
+    breakpoint-shaped assertion would not have noticed.
+    """
+    if not (site["out"] / path).exists():
+        pytest.skip(f"{path} is not part of this build")
+    page.goto(f"{base_url}/{path}")
+    page.wait_for_timeout(300)
+
+    overflowing = []
+    for width in range(320, 1201, 40):
+        page.set_viewport_size({"width": width, "height": 900})
+        page.wait_for_timeout(60)
+        if page.evaluate(
+            "document.documentElement.scrollWidth > window.innerWidth + 1"
+        ):
+            overflowing.append(width)
+
+    assert not overflowing, (
+        f"{path} scrolls horizontally at widths: {overflowing}"
+    )
+
+
+def test_nav_is_fully_visible_across_widths(page, base_url):
+    """
+    The nav itself must fit its container — the symptom being guarded is
+    'the top navigation is completely cut off'.
+    """
+    page.goto(f"{base_url}/index.html")
+    page.wait_for_timeout(300)
+
+    clipped = []
+    for width in range(320, 1201, 40):
+        page.set_viewport_size({"width": width, "height": 900})
+        page.wait_for_timeout(60)
+        over = page.evaluate("""() => {
+            const nav = document.querySelector('.nav-rows');
+            const main = document.querySelector('main');
+            if (!nav || !main) return 0;
+            const cs = getComputedStyle(main);
+            const inner = main.clientWidth
+                - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+            return nav.scrollWidth - Math.ceil(inner);
+        }""")
+        if over > 1:
+            clipped.append((width, over))
+
+    assert not clipped, f"nav overflows its container at (width, px over): {clipped}"

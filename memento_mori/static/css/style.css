@@ -220,7 +220,14 @@ footer {
 
 /* Narrow screens: four max-content columns overflow, so fall back to
    wrapped rows with the label on its own line */
-@media (max-width: 600px) {
+/* The desktop nav is a fixed-width grid: its columns are max-content, so it
+   needs one intrinsic width (currently ~750px for this archive) or it
+   overflows and the page scrolls sideways. The switch to stacked rows has to
+   happen ABOVE that width, not at a conventional 768px — measured overflow
+   begins at ~771px, so 768 would still leave a broken sliver. If a longer
+   username or date range widens the label column, raise this to match; the
+   responsive browser test sweeps widths and will fail if a dead zone opens. */
+@media (max-width: 800px) {
   .nav-rows {
     display: flex;
     flex-direction: column;
