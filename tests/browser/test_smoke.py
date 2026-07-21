@@ -353,3 +353,143 @@ def test_closing_a_viewer_does_not_scroll_the_page(page, base_url, browser_name)
     assert abs(after - before) < 150, (
         f"[{browser_name}] closing scrolled the page: was {before}, now {after}"
     )
+
+
+# --------------------------------------------------------------------------
+# map page
+# --------------------------------------------------------------------------
+
+def _open_map(page, base_url):
+    page.goto(f"{base_url}/map.html")
+    page.wait_for_selector(".leaflet-container", timeout=10000)
+    page.wait_for_timeout(1200)   # let markercluster finish its chunked add
+
+
+def _cluster_counts(page):
+    return page.evaluate("""() => [...document.querySelectorAll('.marker-cluster')]
+        .map(e => parseInt(e.textContent.trim().replace(/[^0-9]/g, '')) || 0)""")
+
+
+def test_map_plots_every_geotagged_item(page, base_url):
+    """
+    Cluster bubbles plus lone markers must account for every point — a
+    silently dropped source or a coordinate-shape mismatch shows up here.
+    """
+    _open_map(page, base_url)
+    counts = _cluster_counts(page)
+    lone = page.locator(".leaflet-marker-icon:not(.marker-cluster)").count()
+    assert counts, "no clusters rendered"
+
+    expected = page.evaluate("""() => {
+        let n = 0;
+        for (const d of [window.postData, window.flickrData]) {
+            if (!d) continue;
+            for (const k of Object.keys(d)) {
+                const e = d[k];
+                if (typeof e.la === 'number' && typeof e.lo === 'number') n++;
+            }
+        }
+        return n;
+    }""")
+    assert sum(counts) + lone == expected, (
+        f"mapped {sum(counts)}+{lone} points, data has {expected}"
+    )
+
+
+def test_map_starts_with_a_hint_and_no_selection(page, base_url):
+    _open_map(page, base_url)
+    assert page.locator("#mapHint").is_visible()
+    assert page.locator("#mapTitle").is_hidden()
+    assert page.locator("#mapGrid .grid-item").count() == 0
+
+
+def test_map_cluster_click_populates_the_grid(page, base_url):
+    _open_map(page, base_url)
+    counts = _cluster_counts(page)
+    biggest = counts.index(max(counts))
+    page.locator(".marker-cluster").nth(biggest).click()
+    page.wait_for_timeout(600)
+
+    title = page.locator("#mapTitle")
+    assert title.is_visible()
+    assert "item" in title.inner_text()
+    tiles = page.locator("#mapGrid .grid-item").count()
+    assert tiles > 0, "cluster click rendered no tiles"
+    # progressive: never more than one batch up front
+    assert tiles <= 300, f"rendered {tiles} tiles in the first batch"
+    assert page.locator("#mapHint").is_hidden()
+
+
+def test_map_flickr_tile_opens_viewer_scoped_to_the_selection(page, base_url):
+    """
+    The Flickr viewer's prev/next must walk the selected cluster, not the
+    whole archive — map.js sets window.mmFlickrOrder for exactly this.
+    """
+    _open_map(page, base_url)
+    counts = _cluster_counts(page)
+    page.locator(".marker-cluster").nth(counts.index(max(counts))).click()
+    page.wait_for_timeout(600)
+
+    flickr = page.locator("#mapGrid .flickr-tile")
+    assert flickr.count() > 1, "need multiple Flickr tiles in the selection"
+    order = page.evaluate("window.mmFlickrOrder")
+    assert order, "mmFlickrOrder was not scoped to the selection"
+
+    flickr.first.click()
+    page.locator("#flickrModal").wait_for(state="visible", timeout=5000)
+    before = page.evaluate("new URLSearchParams(location.search).get('photo')")
+    page.locator("#flickrNext").click()
+    page.wait_for_timeout(400)
+    after = page.evaluate("new URLSearchParams(location.search).get('photo')")
+    assert after != before, "flickr arrow did not move"
+    assert after in order, "flickr arrow navigated outside the selection"
+
+
+def test_map_post_tile_opens_modal_with_working_arrows(page, base_url):
+    """
+    Post arrows walk the live .grid-item list. Flickr tiles share that class
+    but carry no data-index, so without filtering them out the carousel hits
+    NaN and dead-stops — this is the mixed-grid guard.
+    """
+    _open_map(page, base_url)
+    counts = _cluster_counts(page)
+    page.locator(".marker-cluster").nth(counts.index(max(counts))).click()
+    page.wait_for_timeout(600)
+
+    posts = page.locator("#mapGrid .grid-item[data-index]")
+    flickr = page.locator("#mapGrid .flickr-tile")
+    if posts.count() < 2 or flickr.count() < 1:
+        pytest.skip("need a genuinely mixed selection")
+
+    # Open the LAST post in the grid and step forward. That is where the
+    # unfiltered NaNs live: stepping off the end of the posts lands on a
+    # Flickr tile's absent data-index unless they are filtered out. Opening
+    # the first post would pass either way.
+    posts.last.click()
+    page.locator("#postModal").wait_for(state="visible", timeout=5000)
+    before = page.evaluate("new URLSearchParams(location.search).get('post')")
+    page.locator("#modalNext").click()
+    page.wait_for_timeout(500)
+    after = page.evaluate("new URLSearchParams(location.search).get('post')")
+
+    assert after != before, "post arrow did not move"
+    assert after in page.evaluate("Object.keys(window.postData)"), (
+        f"post arrow landed on {after!r}, which is not a post"
+    )
+    assert page.locator("#postModal").is_visible(), "modal closed on navigation"
+
+
+def test_map_cluster_dblclick_zooms_in(page, base_url):
+    _open_map(page, base_url)
+    zoom_before = page.evaluate("""() => {
+        const el = document.querySelector('.leaflet-container');
+        return el ? el.className : '';
+    }""")
+    counts = _cluster_counts(page)
+    page.locator(".marker-cluster").nth(counts.index(max(counts))).dblclick()
+    page.wait_for_timeout(1500)
+    after = _cluster_counts(page)
+    lone = page.locator(".leaflet-marker-icon:not(.marker-cluster)").count()
+    assert (after != counts) or lone, (
+        f"double-click did not drill in: {counts} -> {after}"
+    )

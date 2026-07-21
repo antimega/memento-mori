@@ -580,15 +580,22 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
 
-        // Get all grid items in their current sorted order
+        // Get all grid items in their current sorted order.
+        // Flickr tiles share the .grid-item class but carry data-id instead
+        // of data-index, so they parse to NaN — drop them or they become
+        // dead stops in the post carousel on any page that mixes sources
+        // (the timeline and the map).
         const gridItems = Array.from(document.querySelectorAll('.grid-item'));
-        const gridIndexes = gridItems.map(item => parseInt(item.getAttribute('data-index')));
+        const gridIndexes = gridItems
+            .map(item => parseInt(item.getAttribute('data-index')))
+            .filter(index => !isNaN(index));
 
         // Find the position of the current post in the sorted grid
         const currentPosition = gridIndexes.indexOf(currentPostIndex);
 
         if (currentPosition === -1) {
-            console.error('Current post not found in grid');
+            // No grid on this page (e.g. a ?post= deep link on the map page
+            // before a selection) — nothing to navigate between.
             return;
         }
 

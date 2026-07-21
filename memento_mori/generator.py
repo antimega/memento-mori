@@ -233,6 +233,10 @@ class InstagramSiteGenerator:
             if self.cities:
                 self._generate_cities_html()
 
+            # Generate the map page when anything is geotagged
+            if self._geotagged_count():
+                self._generate_map_html()
+
             # The editor is also gated on any source: it owns the site bio,
             # which every flavor needs to be able to edit.
             if self._has_content():
@@ -758,6 +762,22 @@ class InstagramSiteGenerator:
     # loops over whatever this produces and needs no edit.
     NAV_ROW_BUILDERS = ["_nav_row_instagram", "_nav_row_flickr"]
 
+    def _geotagged_count(self):
+        """
+        How many items across all sources carry usable coordinates.
+
+        Drives the map page and its nav link. Stories are excluded
+        deliberately: only a handful ever carry EXIF coordinates, and they
+        would drag the story viewer onto the map page for a rounding error's
+        worth of pins.
+        """
+        def has_geo(entry):
+            return entry.get("la") not in ("", None) and entry.get("lo") not in ("", None)
+
+        total = sum(1 for e in self.posts.values() if has_geo(e))
+        total += sum(1 for e in self.flickr_items.values() if has_geo(e))
+        return total
+
     def _flickr_tags(self):
         tags = set()
         for entry in self.flickr_items.values():
@@ -770,6 +790,7 @@ class InstagramSiteGenerator:
         # stored, so it cannot go stale when a source is added or refreshed.
         profile_info = site_identity(self.sources)
         cities = getattr(self, "cities", {}) or {}
+        pin_count = self._geotagged_count()
         flickr_tags = self._flickr_tags()
         flickr_albums = self.flickr.get("albums") or {}
 
@@ -798,6 +819,8 @@ class InstagramSiteGenerator:
             "day_count": self._timeline_day_count(),
             "has_cities": bool(cities),
             "city_count": len(cities),
+            "has_pins": pin_count > 0,
+            "pin_count": pin_count,
             "has_flickr": bool(self.flickr_items),
             "flickr_count": len(self.flickr_items),
             "has_flickr_tags": bool(flickr_tags),
@@ -930,6 +953,19 @@ class InstagramSiteGenerator:
         with open(self.output_dir / "tags.html", "w", encoding="utf-8") as f:
             f.write(_minify_html(html_content))
         print(f"Generated tags HTML file: {self.output_dir / 'tags.html'}")
+
+    def _generate_map_html(self):
+        """
+        Render map.html: a shell page. Every pin is plotted client-side from
+        the la/lo already present in posts-data.js / flickr-data.js, so this
+        writes no data of its own.
+        """
+        template = self.jinja_env.get_template("map.html")
+        html_content = template.render(**self._page_context())
+        output_path = self.output_dir / "map.html"
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(_minify_html(html_content))
+        print(f"Generated map HTML file: {output_path}")
 
     def _generate_albums_html(self):
         """

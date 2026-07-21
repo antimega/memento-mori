@@ -28,6 +28,9 @@
             {% if has_cities %}
             {{ navlink('cities', 'cities.html', city_count, 'cities') }}
             {% endif %}
+            {% if has_pins %}
+            {{ navlink('map', 'map.html', pin_count, 'pins') }}
+            {% endif %}
           </div>
           {% for row in nav_rows %}
           <div class="nav-row">

@@ -289,7 +289,7 @@ def _photo_json(pid, taken, privacy="public", name="", description="",
 
 
 def make_flickr_export(root, with_media=True, with_zip=True, exclude_ids=(),
-                       otd_date=None, filler=0):
+                       otd_date=None, filler=0, filler_geo=None):
     """
     Build a Flickr export: metadata for public + non-public items, albums,
     account profile, and local media in both a folder and a zip part.
@@ -364,6 +364,9 @@ def make_flickr_export(root, with_media=True, with_zip=True, exclude_ids=(),
         records[pid] = _photo_json(
             pid, f"2017-{(n % 12) + 1:02d}-{(n % 27) + 1:02d} 12:00:00",
             name=f"Filler {n}", tags=["filler"],
+            # Identical coordinates for every filler item when asked, so the
+            # map page always has one guaranteed cluster at any zoom level.
+            geo=filler_geo,
         )
 
     for pid, doc in records.items():

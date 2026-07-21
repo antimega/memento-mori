@@ -1375,6 +1375,39 @@ a.story-item {
   z-index: 0; /* keep Leaflet panes under the post/story viewer overlays */
 }
 
+/* Map page: one clustered map of every geotagged item, with the selected
+   cluster's items listed underneath. */
+.map-container {
+  margin-top: 30px;
+}
+
+.pin-map {
+  height: 60vh;
+  min-height: 320px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  z-index: 0; /* keep Leaflet panes under the post/story viewer overlays */
+}
+
+.map-hint {
+  margin: 0 0 24px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+#mapTitle:focus-visible {
+  outline: 3px solid #0095f6;
+  outline-offset: 2px;
+}
+
+@media (max-width: 768px) {
+  /* Shorter map so the selection heading and the first tiles stay in view
+     when a cluster is picked. */
+  .pin-map {
+    height: 45vh;
+  }
+}
+
 .city-index {
   display: flex;
   flex-wrap: wrap;
