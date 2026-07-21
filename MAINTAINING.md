@@ -694,6 +694,14 @@ verify each. Keep the viewport fixed between captures.
   non-existent clamp. Click something already in the viewport
   (`_click_tile_in_viewport` in the browser tests).
 
+- **Selection state must not be carried by fading.** In the Flickr city
+  editor every tile starts selected, so the *deselected* state is the one
+  you read across a grid of hundreds — and you have to be able to see what
+  you are excluding. Dimming to `opacity: 0.35` made excluded photos almost
+  invisible. State is now grayscale + an explicit tick (top-right; `.fav-badge`
+  owns top-left and `.city-badge` bottom-left), with hover restoring full
+  colour so you can inspect a tile. A browser test pins the legibility floor.
+
 **Flickr-specific gotchas:**
 
 - **Flickr geo is degrees × 1,000,000 as integer strings** (`"51561666"` →

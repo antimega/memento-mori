@@ -668,3 +668,51 @@ def test_flickr_editor_bulk_favourites(page, base_url):
     assert "unexported" in page.locator("#editorCounts").inner_text(), (
         "pending-change count did not register the Flickr edits"
     )
+
+
+def test_deselected_tiles_stay_clearly_visible(page, base_url):
+    """
+    A deselected tile must still be easy to look at.
+
+    You are deciding which photos to exclude, so you have to be able to SEE
+    the ones you are excluding. An earlier version dimmed them to opacity
+    0.35, which made them nearly invisible; the state is now carried by
+    desaturation plus an explicit tick, not by fading. This pins the
+    legibility floor and the fact that the two states differ visibly.
+    """
+    page.goto(f"{base_url}/edit-flickr.html")
+    page.locator("#tagIndex .city-chip").first.wait_for(timeout=5000)
+    page.locator("#tagIndex .city-chip").first.click()
+    page.wait_for_timeout(400)
+
+    tiles = page.locator("#flickrEditGrid .grid-item")
+    assert tiles.count() > 1, "need at least two tiles"
+    tiles.first.click()          # deselect exactly one
+    # Move the pointer away: hovering a tile deliberately restores full
+    # colour so you can inspect what you are excluding, which would
+    # otherwise be what this measures.
+    page.mouse.move(0, 0)
+    page.wait_for_timeout(250)
+
+    state = page.evaluate("""() => {
+        const off = document.querySelector('#flickrEditGrid .grid-item.deselected');
+        const on = document.querySelector('#flickrEditGrid .grid-item:not(.deselected)');
+        const tick = el => getComputedStyle(el.querySelector('.tile-media'), '::after');
+        return {
+            offOpacity: parseFloat(getComputedStyle(off).opacity),
+            offFilter: getComputedStyle(off).filter,
+            offTick: tick(off).content,
+            onTick: tick(on).content,
+            offOutline: tick(on).outlineColor !== getComputedStyle(
+                off.querySelector('.tile-media')).outlineColor,
+        };
+    }""")
+
+    assert state["offOpacity"] >= 0.6, (
+        f"deselected tiles are too faint to read (opacity {state['offOpacity']})"
+    )
+    assert state["offFilter"] != "none", "no desaturation to distinguish the state"
+    assert state["offTick"] != state["onTick"], (
+        "selected and deselected tiles show the same tick — state is invisible"
+    )
+    assert state["offOutline"], "selection frame does not change with state"
