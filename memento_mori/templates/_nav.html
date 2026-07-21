@@ -1,0 +1,51 @@
+    {# Shared profile header + three-row navigation. Include with
+       {% set active_page = '...' %} first (posts / stories / days / cities /
+       photos / tags / albums). Service rows are data-driven and hide when
+       that import is absent. #}
+    {% macro navlink(page, href, count, label) -%}
+    <div class="stat">
+      <a href="{{ href }}" class="nav-link{% if active_page == page %} active{% endif %}"{% if active_page == page %} aria-current="page"{% endif %}>
+        <span class="stat-count">{{ count|commas }}</span> {{ label }}
+      </a>
+    </div>
+    {%- endmacro %}
+    <div class="profile-info">
+      <div class="profile-details">
+        {# the bio lives in the masthead — see _header.html #}
+        {% if profile.website %}
+        <p class="website"><a href="{{ profile.website }}" target="_blank" rel="noopener noreferrer">{{ profile.website }}</a></p>
+        {% endif %}
+        <div class="stats nav-rows">
+          <div class="nav-row">
+            {# empty label cell keeps row 1's links in the same grid
+               columns as the service rows below #}
+            <span class="nav-service-label" aria-hidden="true"></span>
+            {{ navlink('days', 'timeline.html', day_count, 'days') }}
+            {% if has_cities %}
+            {{ navlink('cities', 'cities.html', city_count, 'cities') }}
+            {% endif %}
+          </div>
+          {% if has_instagram %}
+          <div class="nav-row">
+            <span class="nav-service-label">Instagram {{ username }} ({{ insta_years }}):</span>
+            {{ navlink('posts', 'index.html', post_count, 'posts') }}
+            {% if has_stories %}
+            {{ navlink('stories', 'stories.html', story_count, 'stories') }}
+            {% endif %}
+          </div>
+          {% endif %}
+          {% if has_flickr %}
+          <div class="nav-row">
+            <span class="nav-service-label">Flickr {{ flickr_alias }} ({{ flickr_years }}):</span>
+            {{ navlink('photos', 'flickr.html', flickr_count, 'photos') }}
+            {% if has_flickr_tags %}
+            {{ navlink('tags', 'tags.html', flickr_tag_count, 'tags') }}
+            {% endif %}
+            {% if has_flickr_albums %}
+            {{ navlink('albums', 'albums.html', flickr_album_count, 'albums') }}
+            {% endif %}
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>

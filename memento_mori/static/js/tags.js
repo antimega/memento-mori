@@ -44,7 +44,7 @@ document.addEventListener('DOMContentLoaded', function () {
         chip.appendChild(document.createTextNode(tag + ' '));
         var count = document.createElement('span');
         count.className = 'city-chip-count';
-        count.textContent = byTag[tag].length;
+        count.textContent = byTag[tag].length.toLocaleString();
         chip.appendChild(count);
         chipByTag[tag] = chip;
         chipFrag.appendChild(chip);
@@ -99,8 +99,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 chipByTag[t].removeAttribute('aria-current');
             }
         });
-        title.textContent = tag + ' — ' + byTag[tag].length +
-            (byTag[tag].length !== 1 ? ' photos and videos' : ' photo');
+        var n = byTag[tag].length;
+        title.textContent = tag + ' — ' + n.toLocaleString() +
+            (n !== 1 ? ' photos and videos' : ' photo');
         order = byTag[tag];
         window.mmFlickrOrder = order;   // viewer prev/next follows the tag
         appended = 0;

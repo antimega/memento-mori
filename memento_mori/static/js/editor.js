@@ -16,6 +16,18 @@ document.addEventListener('DOMContentLoaded', function () {
 
     cityInput.value = localStorage.getItem(CITY_KEY) || '';
 
+    // ---- profile bio (site-wide description, exported in city_tags.json) ----
+
+    var bioInput = document.getElementById('bioInput');
+    if (bioInput) {
+        bioInput.value = MMEditor.effectiveBio();
+        bioInput.addEventListener('input', function () {
+            MMEditor.setBio(bioInput.value);
+            MMEditor.persist();
+            renderCounts();
+        });
+    }
+
     // ---- edit mode (tag city vs favourite) ----
 
     var MODE_KEY = 'mm_editor_mode';

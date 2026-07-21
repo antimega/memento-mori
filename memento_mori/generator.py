@@ -161,6 +161,8 @@ class InstagramSiteGenerator:
         self.jinja_env = Environment(
             loader=FileSystemLoader(str(self.template_dir)), autoescape=True
         )
+        # Thousand separators for the large counts in the nav
+        self.jinja_env.filters["commas"] = lambda n: f"{n:,}"
 
     def generate(self):
         """Generate the complete static website and verify output."""
@@ -336,45 +338,15 @@ class InstagramSiteGenerator:
             print("Copied vendor assets")
 
     def _generate_html(self):
-        """Generate HTML using templates."""
-        # Generate the grid HTML
-        grid_html = self._render_grid()
-
-        # Extract data for the main template
-        profile_info = self.data_package["profile"]
-        location_info = self.data_package.get("location", {"location": "Unknown"})
-        date_range = self.data_package["date_range"]["range"]
-        post_count = self.data_package["post_count"]
-        story_count = self.data_package.get("story_count", 0)
-        # Current date for footer
-        generation_date = datetime.datetime.now().strftime("%Y-%m-%d")
-
-        # Render the main template. Post/story data is loaded from the shared
-        # js/posts-data.js file (written by _write_browser_data), not inlined.
+        """Generate index.html (the posts grid)."""
+        # Post/story data is loaded from the shared js/posts-data.js file
+        # (written by _write_browser_data), not inlined.
         template = self.jinja_env.get_template("index.html")
         html_content = template.render(
-            username=profile_info["username"],
-            bio=profile_info.get("bio", ""),  # Pass bio to template
-            profile=profile_info,  # Pass the entire profile object
-            date_range=date_range,
-            post_count=post_count,
-            story_count=story_count,
-            has_stories=story_count > 0,  # Flag to show stories link
-            day_count=self._timeline_day_count(),
-            has_cities=bool(self.cities),
-            city_count=len(self.cities),
-            has_flickr=self._page_context()["has_flickr"],
-            flickr_count=self._page_context()["flickr_count"],
-            has_flickr_tags=self._page_context()["has_flickr_tags"],
-            flickr_tag_count=self._page_context()["flickr_tag_count"],
-            has_flickr_albums=self._page_context()["has_flickr_albums"],
-            flickr_album_count=self._page_context()["flickr_album_count"],
-            grid_html=grid_html,
-            generation_date=generation_date,
-            gtag_id=self.gtag_id,  # Add Google tag ID
+            grid_html=self._render_grid(),
+            **self._page_context(),
         )
 
-        # Write HTML file
         with open(self.output_dir / "index.html", "w", encoding="utf-8") as f:
             f.write(_minify_html(html_content))
 
@@ -493,14 +465,6 @@ class InstagramSiteGenerator:
             print("No stories data found, skipping stories.html generation")
             return
         
-        # Extract data for the stories template
-        profile_info = self.data_package["profile"]
-        date_range = self.data_package["date_range"]["range"]
-        story_count = len(stories_data)
-        post_count = self.data_package["post_count"]
-        # Current date for footer
-        generation_date = datetime.datetime.now().strftime("%Y-%m-%d")
-        
         # Prepare stories data for the template
         stories_list = []
         lazy_after = 30  # Start lazy loading after this many stories
@@ -534,24 +498,8 @@ class InstagramSiteGenerator:
         # Render the stories template
         template = self.jinja_env.get_template("stories_page.html")
         html_content = template.render(
-            username=profile_info["username"],
-            bio=profile_info.get("bio", ""),
-            profile=profile_info,
-            date_range=date_range,
-            post_count=post_count,
-            story_count=story_count,
-            day_count=self._timeline_day_count(),
-            has_cities=bool(self.cities),
-            city_count=len(self.cities),
-            has_flickr=self._page_context()["has_flickr"],
-            flickr_count=self._page_context()["flickr_count"],
-            has_flickr_tags=self._page_context()["has_flickr_tags"],
-            flickr_tag_count=self._page_context()["flickr_tag_count"],
-            has_flickr_albums=self._page_context()["has_flickr_albums"],
-            flickr_album_count=self._page_context()["flickr_album_count"],
             stories=stories_list,
-            generation_date=generation_date,
-            gtag_id=self.gtag_id,
+            **self._page_context(),
         )
 
         # Write HTML file
@@ -681,29 +629,59 @@ class InstagramSiteGenerator:
             )
         return day_list
 
+    @staticmethod
+    def _year_span(epochs):
+        """'(earliest)-(latest)' year label for a list of unix epochs."""
+        if not epochs:
+            return ""
+        years = sorted(
+            {datetime.datetime.utcfromtimestamp(t).year for t in epochs}
+        )
+        if years[0] == years[-1]:
+            return str(years[0])
+        return f"{years[0]}-{years[-1]}"
+
     def _page_context(self):
-        """Template context shared by every page's header/nav."""
+        """Template context shared by every page's header/nav (_nav.html)."""
         profile_info = self.data_package["profile"]
+        posts = self.data_package.get("posts", {}) or {}
+        stories = self.data_package.get("stories", {}) or {}
         story_count = self.data_package.get("story_count", 0)
         cities = getattr(self, "cities", {}) or {}
-        flickr_items = (self.data_package.get("flickr") or {}).get("items") or {}
+        flickr = self.data_package.get("flickr") or {}
+        flickr_items = flickr.get("items") or {}
         flickr_tags = set()
         for entry in flickr_items.values():
             flickr_tags.update(entry.get("tg") or [])
-        flickr_albums = (self.data_package.get("flickr") or {}).get("albums") or {}
+        flickr_albums = flickr.get("albums") or {}
+
+        # Bio: the editor's exported bio (city_tags.json) is authoritative
+        # when the key is present; otherwise the Instagram profile bio
+        city_tags = self.data_package.get("city_tags") or {}
+        bio = profile_info.get("bio", "")
+        if city_tags.get("bio") is not None:
+            bio = city_tags["bio"]
+
+        insta_epochs = [int(t) for t in posts] + [int(t) for t in stories]
+        flickr_epochs = [e["t"] for e in flickr_items.values()]
+
         return {
             "username": profile_info["username"],
-            "bio": profile_info.get("bio", ""),
+            "bio": bio,
             "profile": profile_info,
             "date_range": self.data_package["date_range"]["range"],
             "post_count": self.data_package["post_count"],
             "story_count": story_count,
             "has_stories": story_count > 0,
+            "has_instagram": bool(posts or stories),
+            "insta_years": self._year_span(insta_epochs),
             "day_count": self._timeline_day_count(),
             "has_cities": bool(cities),
             "city_count": len(cities),
             "has_flickr": bool(flickr_items),
             "flickr_count": len(flickr_items),
+            "flickr_alias": flickr.get("meta", {}).get("path_alias", ""),
+            "flickr_years": self._year_span(flickr_epochs),
             "has_flickr_tags": bool(flickr_tags),
             "flickr_tag_count": len(flickr_tags),
             "has_flickr_albums": bool(flickr_albums),
@@ -1050,8 +1028,14 @@ class InstagramSiteGenerator:
             "cities": {},
             "favorites": {"posts": {}, "stories": {}},
         }
+        tags = dict(tags)  # embed-only copy; don't mutate the package
         if "favorites" not in tags:
             tags["favorites"] = {"posts": {}, "stories": {}}
+        # Embed the EFFECTIVE bio so the editor's textarea starts from what
+        # the site currently shows (exported city_tags.json then becomes the
+        # authoritative source for it)
+        if tags.get("bio") is None:
+            tags["bio"] = self.data_package["profile"].get("bio", "")
 
         months = self._build_month_list()
 

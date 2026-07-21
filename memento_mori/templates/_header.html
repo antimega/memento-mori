@@ -1,0 +1,11 @@
+    {# Shared masthead: the site title and the profile description. Its
+       inner width/padding match <main> so everything lines up vertically.
+       The title is plain text — it used to link off-site. #}
+    <header>
+      <div class="header-content">
+        <div class="logo">Memento Mori</div>
+        {% if bio %}
+        <p class="site-bio">{{ bio }}</p>
+        {% endif %}
+      </div>
+    </header>

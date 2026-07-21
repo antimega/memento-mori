@@ -28,74 +28,10 @@
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
-    <header>
-      <div class="header-content">
-        <a href="https://github.com/greg-randall/memento-mori" class="logo">Memento Mori</a>
-        <div class="date-range-header" id="date-range-header">{{ date_range }}</div>
-      </div>
-    </header>
+    {% include "_header.html" %}
     <main id="main" tabindex="-1">
-      <div class="profile-info">
-        <div class="profile-details">
-          <h1 id="username">{{ username }}</h1>
-          {% if bio %}
-          <p class="bio">{{ bio }}</p>
-          {% endif %}
-          {% if profile.website %}
-          <p class="website"><a href="{{ profile.website }}" target="_blank" rel="noopener noreferrer">{{ profile.website }}</a></p>
-          {% endif %}
-          <div class="stats">
-            <div class="stat">
-              <a href="index.html" class="nav-link">
-                <span class="stat-count" id="post-count">{{ post_count }}</span> posts
-              </a>
-            </div>
-            {% if has_stories %}
-            <div class="stat">
-              <a href="stories.html" class="nav-link">
-                <span class="stat-count" id="story-count">{{ story_count }}</span> stories
-              </a>
-            </div>
-            {% endif %}
-            <div class="stat">
-              <a href="timeline.html" class="nav-link">
-                <span class="stat-count" id="day-count">{{ day_count }}</span> days
-              </a>
-            </div>
-            {% if has_cities %}
-            <div class="stat">
-              <a href="cities.html" class="nav-link">
-                <span class="stat-count" id="city-count">{{ city_count }}</span> cities
-              </a>
-            </div>
-            {% endif %}
-            <div class="stat">
-              <a href="flickr.html" class="nav-link active" aria-current="page">
-                <span class="stat-count" id="flickr-count">{{ flickr_count }}</span> photos
-              </a>
-            </div>
-            {% if has_flickr_tags %}
-            <div class="stat">
-              <a href="tags.html" class="nav-link">
-                <span class="stat-count" id="tag-count">{{ flickr_tag_count }}</span> tags
-              </a>
-            </div>
-            {% endif %}
-            {% if has_flickr_albums %}
-            <div class="stat">
-              <a href="albums.html" class="nav-link">
-                <span class="stat-count" id="album-count">{{ flickr_album_count }}</span> albums
-              </a>
-            </div>
-            {% endif %}
-            {% if profile.follower_count is defined and profile.follower_count is not none %}
-            <div class="stat">
-              <span class="stat-count" id="follower-count">{{ profile.follower_count }}</span> followers
-            </div>
-            {% endif %}
-          </div>
-        </div>
-      </div>
+      {% set active_page = 'photos' %}
+      {% include "_nav.html" %}
       <div class="sort-options">
         <div class="sort-row">
           <button type="button" class="sort-link active" data-sort="newest" aria-current="true">Newest</button>
@@ -124,10 +60,6 @@
 
     {% include "_flickr_viewer.html" %}
 
-    <footer>
-      <div class="footer-content">
-        <p>Generated on {{ generation_date }} with <a href="https://github.com/greg-randall/memento-mori">Memento Mori</a>.</p>
-      </div>
-    </footer>
+    {% include "_footer.html" %}
   </body>
 </html>
