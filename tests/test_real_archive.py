@@ -157,3 +157,27 @@ def test_timeline_server_renders_exactly_one_month():
 def test_pages_carry_no_inline_style_blocks():
     for page in OUTPUT.glob("*.html"):
         assert "<style" not in page.read_text(encoding="utf-8"), page.name
+
+
+def test_map_page_pin_count_matches_the_data(data):
+    """The map's nav claim must equal the geotagged items across sources."""
+    if not (OUTPUT / "map.html").exists():
+        pytest.skip("no map page in this build")
+    pins = 0
+    for entries in (ig_posts(OUTPUT), flickr_items(OUTPUT)):
+        for entry in entries.values():
+            if entry.get("la") not in ("", None) and entry.get("lo") not in ("", None):
+                pins += 1
+    assert pins, "map.html exists but nothing is geotagged"
+    html = (OUTPUT / "index.html").read_text(encoding="utf-8")
+    assert re.search(
+        rf'<span class="stat-count">{re.escape(f"{pins:,}")}</span>\s*pins', html
+    ), f"nav does not report {pins:,} pins"
+
+
+def test_map_page_stays_a_shell(data):
+    """However many pins, the page must not inline them."""
+    if not (OUTPUT / "map.html").exists():
+        pytest.skip("no map page in this build")
+    size = (OUTPUT / "map.html").stat().st_size
+    assert size < 20000, f"map.html is {size} bytes; point data may be inlined"

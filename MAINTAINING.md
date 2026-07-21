@@ -23,8 +23,9 @@ thumbnails. Design constraints that shape everything:
   or from both; nav rows for absent sources hide themselves, and `index.html`
   becomes a redirect stub when Instagram is not present (see §3z). Sources are
   a registry, not a pair of special cases.
-- **Vendored libraries** (Leaflet 1.9.4, marked 12.0.2) under
-  `static/vendor/` — no CDN.
+- **Vendored libraries** (Leaflet 1.9.4, Leaflet.markercluster 1.5.3,
+  marked 12.0.2) under `static/vendor/` — no CDN. `_copy_static_assets`
+  copies `vendor/**` recursively, so a new library ships by existing.
 
 ---
 
@@ -152,7 +153,7 @@ Three rules follow from it:
 | `cli.py` | A flag, plus a branch in the collection step |
 | `generator.py` | `SOURCE_PRIORITY` entry, a `_nav_row_<key>` builder listed in `NAV_ROW_BUILDERS`, page generators, a browser-data writer, timeline day-bucket + tile ctx |
 | Templates | Its pages, its timeline section, its tile markup (**parity contract** — see §5) |
-| JS | `mmTiles.<key>` builder, a viewer, an `on-this-day.js` PROVIDERS entry |
+| JS | `mmTiles.<key>` builder, a viewer, an `on-this-day.js` PROVIDERS entry, a `map.js` PROVIDERS entry (if it carries coordinates) |
 | `merger.py` | **Nothing.** Non-Instagram sources are carried through `--merge` by a generic loop |
 
 **The clobber guard.** A fresh run rebuilds `data.json` from only what it was
@@ -348,6 +349,27 @@ by **index**, deep links via `?post=`/`?story=`, UTC date basis throughout.
   filter) the filter placeholder. Change them together or the same number
   renders two different ways on one screen.
 
+- **`map.html`** — every geotagged item from every source as clustered
+  markers, with the selected cluster's items listed underneath. A shell
+  page: `la`/`lo` already ship in `posts-data.js`/`flickr-data.js`, so it
+  plots ~14k pins with no data file of its own and stays ~6 KB. `map.js`
+  uses the same **provider registry** shape as `on-this-day.js` — a source
+  is one entry naming its data, how to read a point's coords/date, and its
+  tile builder (`mmTiles.post` / `mmFlickrGridTile`, both reused rather than
+  re-implemented, so tile markup stays single-sourced).
+
+  **Interaction model:** single click on a cluster *selects* it (renders its
+  items below); **double-click zooms** (`clusterdblclick` →
+  `zoomToBounds`). `zoomToBoundsOnClick` and `spiderfyOnMaxZoom` are off on
+  purpose — with thousands of pins per bubble the useful question is "what
+  happened here", and the grid answers it better than a spider. Coincident
+  points at max zoom therefore stay one cluster and are read from the grid.
+  `chunkedLoading` keeps the bulk `addLayers` off the main thread;
+  `removeOutsideVisibleBounds` (default on) is what keeps the DOM small.
+  Selection renders in 300-tile batches (a 12k cluster must not build 12k
+  nodes), sets `window.mmFlickrOrder` so the Flickr viewer's prev/next stays
+  inside the selection, and focuses the heading so the change is announced.
+
 - **`edit.html` + `edit-cities.html`** — the private tagging/favourites/city-text
   editor. **Loads no data files** — it embeds `window.cityTags` and renders tiles
   server-side (so it's ~4 MB and stays that way; out of scope for the timeline
@@ -427,6 +449,16 @@ and by inter-tag whitespace — both harmless. Post tiles are otherwise identica
   one place and all three must follow. The header is deliberately **static**,
   not fixed — it now holds the bio, which a fixed header would pin to the
   viewport forever. (The old `--header-height` variable is gone.)
+- **The nav's mobile breakpoint is measured, not conventional (800px).** The
+  desktop nav is a `max-content` grid, so it has ONE intrinsic width (~750px
+  for the reference archive, driven by the longest service label). Below
+  that plus `main`'s padding, it overflows and the page scrolls sideways. The
+  stacked layout therefore has to take over *above* that width — a
+  conventional 768px would still leave a broken sliver, and the original
+  600px left a 171px dead zone where the nav was simply cut off. A longer
+  username or date range widens the label column: raise the breakpoint to
+  match. The browser tests sweep 320-1200px asserting no horizontal scroll
+  and no nav clipping, so a new dead zone fails CI rather than shipping.
 - **The three-row nav is one CSS grid.** `.nav-rows` is
   `grid-template-columns: repeat(4, max-content)`; each `.nav-row` is
   `display: contents` so its cells join the *parent* grid — that's what makes
@@ -621,6 +653,12 @@ verify each. Keep the viewport fixed between captures.
 - **GitHub auth isn't available in this environment** — commits/pushes are done
   by the maintainer, not the tooling.
 
+- **Flickr tiles share `.grid-item` but carry `data-id`, not `data-index`.**
+  `navigatePost` maps `data-index` over every `.grid-item` on the page, so
+  on any mixed page (timeline, map) unfiltered Flickr tiles become `NaN`
+  dead-stops in the post carousel — stepping forward off the last post goes
+  nowhere. Hence the `.filter(index => !isNaN(index))` there. A test that
+  opens the *first* post will not catch this; it has to step off the *last*.
 - **Safari does not focus a link when you click it; Chromium does.** So a
   viewer's `lastFocused` is often an ancestor (`<main tabindex="-1">`), and
   restoring focus to it on close scrolls that element into view — throwing
@@ -711,16 +749,17 @@ memento_mori/
   cli.py extractor.py loader.py media.py merger.py file_mapper.py generator.py
   flickr.py   (Flickr importer: loader, dedup, API client, downloader/processor)
   templates/  index.html grid.html stories_page.html timeline.html cities.html
-              flickr.html tags.html albums.html edit.html edit-cities.html
+              flickr.html tags.html albums.html map.html
+              edit.html edit-cities.html
               _header.html _nav.html _footer.html          (shared chrome)
               _post_modal.html _story_viewer.html _flickr_viewer.html
               (stories.html — UNUSED; the stories page is stories_page.html)
   static/js/  posts-data*/stories-data*/flickr-data* (generated at build)
               modal.js stories.js month-nav.js timeline-months.js on-this-day.js
-              flickr-grid.js flickr-viewer.js tags.js albums.js
+              flickr-grid.js flickr-viewer.js tags.js albums.js map.js
               editor-common.js editor.js editor-cities.js
   static/css/ style.css
-  static/vendor/ leaflet/ marked/
+  static/vendor/ leaflet/ leaflet.markercluster/ marked/
 flickr-download/  (input, gitignored: flickr_metadata/, data-download-*/,
                    originals-cache/, flickr_api_cache.json,
                    flickr_exclude.json, flickr_dedup_report.json)

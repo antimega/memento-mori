@@ -25,6 +25,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from tests.conftest import (  # noqa: E402
+    BASE_TS,
     _classic_post,
     copy_tiny_video,
     make_flickr_export,
@@ -34,6 +35,10 @@ from tests.conftest import (  # noqa: E402
 )
 
 pytestmark = pytest.mark.browser
+
+# One shared coordinate for the map fixture: Flickr filler items and a few
+# Instagram posts all sit here, guaranteeing a mixed cluster at any zoom.
+MAP_PIN = (48.8584, 2.2945)
 
 
 def _free_port():
@@ -68,6 +73,18 @@ def site(tmp_path_factory):
         otd_posts.append(_classic_post(f"media/posts/{name}", ts,
                                        title=f"Memory from {years_ago}y ago"))
 
+    # A few posts sharing the Flickr filler's coordinates, so the map page
+    # has a cluster containing BOTH sources — the mixed grid is where post
+    # arrows have to step over Flickr tiles.
+    for n in range(3):
+        ts = BASE_TS - 200000 - n * 3600
+        name = f"pin_{n}.jpg"
+        write_jpeg(export / "media" / "posts" / name, color=(30, 140, 90 + n * 20))
+        otd_posts.append(_classic_post(
+            f"media/posts/{name}", ts, title=f"At the tower {n}",
+            exif={"latitude": MAP_PIN[0], "longitude": MAP_PIN[1]},
+        ))
+
     ig_ts = make_instagram_export(export, extra_posts=otd_posts)
 
     flickr = root / "flickr-download"
@@ -79,8 +96,12 @@ def site(tmp_path_factory):
     # filler makes flickr.html long enough to scroll past the point where
     # body overflow:hidden clamps the offset — the short page a minimal
     # fixture produces cannot reproduce that class of bug.
+    # filler_geo puts every filler item on one spot, guaranteeing a cluster
+    # for the map page; the fixture already has geotagged Instagram posts
+    # (EXIF + place metadata) elsewhere, so the map grid is genuinely mixed.
     info = make_flickr_export(
-        flickr, otd_date=flickr_otd.strftime("%Y-%m-%d %H:%M:%S"), filler=120)
+        flickr, otd_date=flickr_otd.strftime("%Y-%m-%d %H:%M:%S"), filler=120,
+        filler_geo=MAP_PIN)
     write_api_cache(flickr, video_ids=[info["ids"]["video"]])
 
     out = root / "output"

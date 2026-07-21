@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memento Mori - {{ username }}'s Map</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+    <link rel="stylesheet" href="vendor/leaflet.markercluster/MarkerCluster.css">
+    <link rel="stylesheet" href="vendor/leaflet.markercluster/MarkerCluster.Default.css">
+    {% if gtag_id %}
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id={{ gtag_id }}"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+
+      gtag('config', '{{ gtag_id }}');
+    </script>
+    {% endif %}
+    <!-- Every geotagged item, from every source, on one clustered map.
+         All deferred; defer preserves execution order, so the tile builders
+         and viewers are in place before map.js runs, and markercluster
+         evaluates after Leaflet (it reads window.L at eval time).
+         posts-data/flickr-data already carry la/lo, so this page needs no
+         data file of its own. -->
+    <script src="js/posts-data.js" defer></script>
+    {% if has_flickr %}
+    <script src="js/flickr-data.js" defer></script>
+    {% endif %}
+    <!-- timeline-months.js is loaded only for its exposed mmTiles.post
+         builder (it has no DOMContentLoaded handler and touches no DOM at
+         eval); flickr-grid.js likewise for mmFlickrGridTile. -->
+    <script src="js/timeline-months.js" defer></script>
+    {% if has_flickr %}
+    <script src="js/flickr-grid.js" defer></script>
+    {% endif %}
+    <script src="js/modal.js" defer></script>
+    {% if has_flickr %}
+    <script src="js/flickr-viewer.js" defer></script>
+    {% endif %}
+    <script src="vendor/leaflet/leaflet.js" defer></script>
+    <script src="vendor/leaflet.markercluster/leaflet.markercluster.js" defer></script>
+    <script src="js/map.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    {% include "_header.html" %}
+    <main id="main" tabindex="-1">
+      {% set active_page = 'map' %}
+      {% include "_nav.html" %}
+
+      <div class="map-container">
+        <div id="pinMap" class="pin-map" role="application"
+             aria-label="Map of every geotagged photo and post"></div>
+
+        <p class="map-hint" id="mapHint">
+          Click a cluster to see its photos and posts. Double-click to zoom in.
+        </p>
+
+        {# Heading and grid are filled in by map.js when a cluster or marker
+           is selected. The heading is focusable so selection is announced. #}
+        <h2 class="timeline-day-header" id="mapTitle" tabindex="-1" hidden></h2>
+        <div class="posts-grid" id="mapGrid"></div>
+      </div>
+    </main>
+
+    {% include "_post_modal.html" %}
+    {% if has_flickr %}
+    {% include "_flickr_viewer.html" %}
+    {% endif %}
+
+    {% include "_footer.html" %}
+  </body>
+</html>

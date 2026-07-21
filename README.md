@@ -50,7 +50,7 @@ A Flickr import adds more of the same: only your **public** Flickr items are eve
 - **Flickr section**: your public photos and videos as their own grid, plus tag and album navigators, with titles, descriptions, and location maps
 - **Cities**: tag content by city and get a dedicated page with a clickable index and an interactive map; write a Markdown blurb for each city
 - **Favourites**: star your best items so they surface first within each city
-- **Places & maps**: the tagged location under each thumbnail, and a small location map inside the detail view
+- **Places & maps**: the tagged location under each thumbnail, a small location map inside the detail view, and a **map page** plotting every geotagged photo and post from every source as clustered pins — click a cluster to browse what you shot there
 - **Incremental updates**: merge a fresh export into an existing site without reprocessing everything, and re-render the whole site in seconds after editing
 - **Media optimization**: converts images to WebP, generates thumbnails, and supports video playback (videos show a still preview and don't autoplay)
 - **Cross-post de-duplication**: Flickr copies of Instagram posts already in the site are detected and excluded
@@ -285,6 +285,7 @@ Open `index.html` from the output directory (default: `./output`). The stats und
 
 - **days** (`timeline.html`) — every post, story, and Flickr item grouped by date, newest first, one month at a time, with an **On This Day** toggle for memories from previous years. Each day shows posts, then stories, then a "Flickr photos and videos" section.
 - **cities** (`cities.html`) — appears once you've tagged content with cities (see below); one city at a time with an interactive map and a clickable index.
+- **pins** (`map.html`) — every geotagged item across all your sources on one clustered map. Click a cluster to list its photos and posts underneath (they open in the usual viewers); double-click to zoom in. Appears whenever anything is geotagged.
 - **posts** (`index.html`) — the main Instagram grid, sortable by newest, oldest, or random. Click any post to open it in a modal, which shows a small map of its location when coordinates are available.
 - **stories** (`stories.html`) — your Instagram Stories in a 9:16 viewer; advance them yourself with the arrows or by clicking.
 - **photos** (`flickr.html`) — your public Flickr photos and videos in one grid (loading progressively as you scroll), sortable newest/oldest/random, with a viewer showing the title, description, tags, albums, and location.
