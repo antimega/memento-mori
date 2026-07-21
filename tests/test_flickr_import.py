@@ -21,8 +21,10 @@ from tests.conftest import make_flickr_export, make_instagram_export, write_api_
 from tests.helpers import (
     assert_no_browser_only_fields_in_sidecar,
     decode_browser_data,
+    flickr_items,
     grep_tree,
     read_data_json,
+    source,
 )
 
 SENTINEL_KEY = "SENTINELAPIKEY0000deadbeef"
@@ -101,12 +103,12 @@ def test_flickr_pages_generated(built):
 
 def test_public_item_count(built):
     """8 public items in the fixture; 2 non-public excluded."""
-    items = read_data_json(built["out"])["flickr"]["items"]
+    items = flickr_items(built["out"])
     assert len(items) == 8, sorted(items)
 
 
 def test_every_item_has_media(built):
-    items = read_data_json(built["out"])["flickr"]["items"]
+    items = flickr_items(built["out"])
     for pid, entry in items.items():
         assert entry.get("m"), f"flickr item {pid} has no media"
 
@@ -116,7 +118,7 @@ def test_same_second_collision_keeps_both(built):
     Two items share a date_taken second. Entries are keyed by photo id
     precisely so neither is dropped — a timestamp-keyed dict would lose one.
     """
-    items = read_data_json(built["out"])["flickr"]["items"]
+    items = flickr_items(built["out"])
     a, b = str(built["ids"]["collide_a"]), str(built["ids"]["collide_b"])
     assert a in items and b in items
     assert items[a]["t"] == items[b]["t"], "fixture no longer collides"
@@ -124,7 +126,7 @@ def test_same_second_collision_keeps_both(built):
 
 def test_geo_scaling_and_rounding(built):
     """Flickr geo is degrees x 1e6 as integer strings; divide, round to 5dp."""
-    items = read_data_json(built["out"])["flickr"]["items"]
+    items = flickr_items(built["out"])
     entry = items[str(built["ids"]["geo"])]
     assert entry["la"] == 22.285
     assert entry["lo"] == 114.15217
@@ -132,7 +134,7 @@ def test_geo_scaling_and_rounding(built):
 
 def test_description_html_flattened_to_text(built):
     """<br> becomes a newline; a link becomes 'label (url)'. Never raw HTML."""
-    items = read_data_json(built["out"])["flickr"]["items"]
+    items = flickr_items(built["out"])
     desc = items[str(built["ids"]["plain"])]["ds"]
     assert "<br>" not in desc and "<a " not in desc
     assert "Line one\nLine two" in desc
@@ -140,25 +142,25 @@ def test_description_html_flattened_to_text(built):
 
 
 def test_tags_and_albums(built):
-    data = read_data_json(built["out"])
-    items = data["flickr"]["items"]
+    data = source(built["out"], "flickr")
+    items = data["items"]
     entry = items[str(built["ids"]["plain"])]
     assert set(entry["tg"]) == {"holiday", "beach"}
     assert entry["al"] == ["7001"]
-    albums = data["flickr"]["albums"]
+    albums = data["albums"]
     assert albums["7001"]["t"] == "Summer"
     assert "7002" not in albums, "synthetic 'not in an album' should be skipped"
 
 
 def test_default_license_omitted(built):
     """'All Rights Reserved' is the default and is not worth a field."""
-    items = read_data_json(built["out"])["flickr"]["items"]
+    items = flickr_items(built["out"])
     assert "lic" not in items[str(built["ids"]["plain"])]
     assert items[str(built["ids"]["geo"])]["lic"] == "Attribution License"
 
 
 def test_view_and_fave_counts_not_imported(built):
-    blob = json.dumps(read_data_json(built["out"])["flickr"])
+    blob = json.dumps(source(built["out"], "flickr"))
     for field in ('"count_views"', '"count_faves"', '"count_comments"'):
         assert field not in blob
 
@@ -169,7 +171,7 @@ def test_video_identified_from_cache(built):
     API sweep (cached here) marks them. This proves the cache path works with
     no network.
     """
-    items = read_data_json(built["out"])["flickr"]["items"]
+    items = flickr_items(built["out"])
     entry = items[str(built["ids"]["video"])]
     assert entry.get("vd") == 1, "video not flagged"
     assert entry["m"][0].endswith(".mp4")
@@ -181,14 +183,14 @@ def test_zip_part_item_imported(built):
     Media inside an un-extracted data-download-*.zip is indexed in place and
     materialized on demand.
     """
-    items = read_data_json(built["out"])["flickr"]["items"]
+    items = flickr_items(built["out"])
     assert str(built["ids"]["zipped"]) in items
     cache = built["flickr"] / "originals-cache"
     assert cache.exists() and any(cache.iterdir()), "zip member never materialized"
 
 
 def test_untitled_filename_pattern_indexed(built):
-    items = read_data_json(built["out"])["flickr"]["items"]
+    items = flickr_items(built["out"])
     entry = items[str(built["ids"]["untitled"])]
     assert entry.get("m"), "untitled-pattern file not matched to its item"
     assert "tt" not in entry, "untitled item should carry no title"
@@ -201,7 +203,7 @@ def test_exif_rotation_applied_exactly_once(built):
     portrait with red on top; applying both (the historical double-rotation
     bug) does not.
     """
-    items = read_data_json(built["out"])["flickr"]["items"]
+    items = flickr_items(built["out"])
     path = built["out"] / items[str(built["ids"]["rotated"])]["m"][0]
     with Image.open(path) as img:
         img = img.convert("RGB")

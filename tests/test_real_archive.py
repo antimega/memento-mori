@@ -18,7 +18,14 @@ from pathlib import Path
 
 import pytest
 
-from tests.helpers import decode_browser_data, read_data_json
+from tests.helpers import (
+    decode_browser_data,
+    flickr_items,
+    ig_posts,
+    ig_stories,
+    read_data_json,
+    source,
+)
 
 OUTPUT = Path(__file__).resolve().parents[1] / "output"
 
@@ -37,24 +44,27 @@ def data():
 
 
 def test_sidecar_and_browser_posts_agree(data):
+    sidecar_posts = ig_posts(OUTPUT)
     posts = decode_browser_data(OUTPUT / "js/posts-data.js", "postData")
-    assert len(posts) == len(data["posts"])
-    assert set(posts) == {str(k) for k in data["posts"]}
+    assert len(posts) == len(sidecar_posts)
+    assert set(posts) == {str(k) for k in sidecar_posts}
 
 
 def test_sidecar_and_browser_stories_agree(data):
-    if not data.get("stories"):
+    sidecar_stories = ig_stories(OUTPUT)
+    if not sidecar_stories:
         pytest.skip("no stories in this archive")
     stories = decode_browser_data(OUTPUT / "js/stories-data.js", "storiesData")
-    assert len(stories) == len(data["stories"])
+    assert len(stories) == len(sidecar_stories)
 
 
 def test_sidecar_and_browser_flickr_agree(data):
-    if not (data.get("flickr") or {}).get("items"):
+    sidecar_items = flickr_items(OUTPUT)
+    if not sidecar_items:
         pytest.skip("no Flickr section in this archive")
     items = decode_browser_data(OUTPUT / "js/flickr-data.js", "flickrData")
-    assert len(items) == len(data["flickr"]["items"])
-    assert set(items) == set(data["flickr"]["items"])
+    assert len(items) == len(sidecar_items)
+    assert set(items) == set(sidecar_items)
 
 
 def test_nav_counts_match_the_data(data):
@@ -63,28 +73,28 @@ def test_nav_counts_match_the_data(data):
     here. It must agree with the data, thousands separators and all.
     """
     html = (OUTPUT / "index.html").read_text(encoding="utf-8")
-    expected = f"{len(data['posts']):,}"
+    expected = f"{len(ig_posts(OUTPUT)):,}"
     assert re.search(
         rf'<span class="stat-count">{re.escape(expected)}</span>\s*posts', html
     ), f"nav does not report {expected} posts"
 
-    if (data.get("flickr") or {}).get("items"):
-        expected = f"{len(data['flickr']['items']):,}"
+    if flickr_items(OUTPUT):
+        expected = f"{len(flickr_items(OUTPUT)):,}"
         assert re.search(
             rf'<span class="stat-count">{re.escape(expected)}</span>\s*photos', html
         ), f"nav does not report {expected} photos"
 
 
 def test_no_browser_only_fields_in_the_sidecar(data):
-    for section in ("posts", "stories"):
-        for key, entry in (data.get(section) or {}).items():
-            assert not ({"th", "dm", "vp"} & set(entry)), f"{section}[{key}]"
-    for key, entry in ((data.get("flickr") or {}).get("items") or {}).items():
-        assert not ({"th", "dm", "vp"} & set(entry)), f"flickr[{key}]"
+    for name, entries in (("posts", ig_posts(OUTPUT)),
+                          ("stories", ig_stories(OUTPUT)),
+                          ("flickr", flickr_items(OUTPUT))):
+        for key, entry in entries.items():
+            assert not ({"th", "dm", "vp"} & set(entry)), f"{name}[{key}]"
 
 
 def test_every_flickr_item_has_media(data):
-    items = (data.get("flickr") or {}).get("items") or {}
+    items = flickr_items(OUTPUT)
     if not items:
         pytest.skip("no Flickr section")
     missing = [k for k, v in items.items() if not v.get("m")]
@@ -93,7 +103,7 @@ def test_every_flickr_item_has_media(data):
 
 def test_no_privacy_strings_serialized(data):
     """A Flickr privacy value in the output means the filter leaked."""
-    blob = json.dumps(data.get("flickr") or {})
+    blob = json.dumps(source(OUTPUT, "flickr"))
     assert '"privacy"' not in blob
     assert "friends & family" not in blob
 
@@ -126,8 +136,8 @@ def test_media_referenced_by_the_sidecar_resolves(data):
     literal path nor its .webp sibling existing.
     """
     missing = []
-    sources = list((data.get("posts") or {}).items())[:100]
-    sources += list(((data.get("flickr") or {}).get("items") or {}).items())[:100]
+    sources = list(ig_posts(OUTPUT).items())[:100]
+    sources += list(flickr_items(OUTPUT).items())[:100]
     for key, entry in sources:
         for m in entry.get("m", []):
             if not m:

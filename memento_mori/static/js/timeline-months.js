@@ -8,7 +8,7 @@
 //
 // Window contract exposed for the other timeline scripts:
 //   window.monthKeyOf(ts)        -> "YYYY-MM" (UTC) for a timestamp
-//   window.mmTiles.post/.story   -> a single tile element (markup parity with
+//   window.mmTiles.post/.story/.flickr -> a single tile element (markup parity with
 //                                   the Jinja tiles in templates/timeline.html)
 //   window.mmBuildMonth(key)     -> the [data-month] panel (existing or built),
 //                                   or null for an unknown key (no ghost month)
@@ -313,6 +313,11 @@
         var entry = window.flickrData && window.flickrData[target];
         return entry ? monthKeyOf(entry.t) : null;
     }
+
+    // flickrTimelineTile is a hoisted declaration below; exposing it on
+    // mmTiles lets On This Day build Flickr memories with the same
+    // parity-maintained markup the timeline uses.
+    mmTiles.flickr = flickrTimelineTile;
 
     window.monthKeyOf = monthKeyOf;
     window.mmTiles = mmTiles;

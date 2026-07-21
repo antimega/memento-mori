@@ -212,3 +212,38 @@ def test_pages_work_from_the_filesystem(page, site):
         page.wait_for_timeout(150)
     # tiles still render with no origin
     assert page.locator("#tagIndex .city-chip").count() > 0
+
+
+def test_on_this_day_includes_flickr_memories(page, base_url):
+    """
+    On This Day spans every source. Flickr entries are id-keyed with the date
+    inside the entry, so they exercise the provider's timeOf hook.
+    """
+    page.goto(f"{base_url}/timeline.html")
+    page.locator("#viewOnThisDay").click()
+    otd = page.locator("#onThisDay")
+    otd.wait_for(state="visible", timeout=5000)
+
+    # The Flickr memory is planted 3 years back; its tile carries data-id
+    # (Flickr) rather than data-index (Instagram).
+    flickr_tiles = otd.locator(".otd-tile[data-id]")
+    assert flickr_tiles.count() > 0, "no Flickr memories in On this day"
+
+    flickr_tiles.first.click()
+    page.locator("#flickrModal").wait_for(state="visible", timeout=5000)
+    page.keyboard.press("Escape")
+    page.locator("#flickrModal").wait_for(state="hidden", timeout=5000)
+
+
+def test_on_this_day_story_tiles_keep_their_shape(page, base_url):
+    """
+    Story tiles are 9:16 and must not pick up the square .otd-tile styling
+    that posts and Flickr items use.
+    """
+    page.goto(f"{base_url}/timeline.html")
+    page.locator("#viewOnThisDay").click()
+    page.locator("#onThisDay").wait_for(state="visible", timeout=5000)
+    stories = page.locator("#onThisDay .timeline-story-tile")
+    if stories.count():
+        assert stories.first.evaluate(
+            "el => el.classList.contains('otd-tile')") is False

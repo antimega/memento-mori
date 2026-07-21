@@ -15,6 +15,76 @@ from memento_mori.generator import InstagramSiteGenerator
 from memento_mori import merger
 
 
+def _import_flickr_source(args, output_dir, ig_posts):
+    """
+    Run the Flickr import and return its `sources.flickr` section.
+
+    ig_posts supplies the timestamps used to detect Instagram cross-posts;
+    an empty dict (a Flickr-only site) makes the dedup pass a no-op.
+    """
+    from memento_mori.flickr import import_flickr
+    print(f"\n📷 IMPORTING FLICKR from {args.flickr}")
+    return import_flickr(
+        args.flickr, output_dir,
+        ig_timestamps=list(ig_posts.keys()),
+        thread_count=args.threads,
+        quality=args.quality,
+        max_dimension=args.max_dimension,
+        api_key=os.environ.get("FLICKR_API_KEY"),
+        refresh=args.flickr_refresh,
+        verbose=args.verbose,
+    )
+
+
+def _describe_sources(sources):
+    """One-line summary of what a package holds, for the run banner."""
+    parts = []
+    instagram = sources.get("instagram") or {}
+    if instagram:
+        parts.append(f"{len(instagram.get('posts') or {})} posts, "
+                     f"{len(instagram.get('stories') or {})} stories")
+    flickr = sources.get("flickr") or {}
+    if flickr:
+        parts.append(f"{len(flickr.get('items') or {})} Flickr items")
+    for key, section in sources.items():
+        if key not in ("instagram", "flickr"):
+            parts.append(f"{key} source")
+    return "; ".join(parts) or "no sources"
+
+
+def _check_fresh_would_not_clobber(output_dir, providing):
+    """
+    Refuse a fresh build that would drop sources an existing site has.
+
+    A fresh run rebuilds data.json from only what it was given. Before this
+    guard, running an Instagram-only build over a combined site silently
+    dropped the whole Flickr section from the sidecar — the site kept its
+    pages until the next regenerate, then lost them. Fresh over an existing
+    site is allowed only when it re-provides everything already there.
+
+    Returns True when it is safe to continue.
+    """
+    sidecar_path = Path(output_dir) / "data.json"
+    if not sidecar_path.exists():
+        return True
+    try:
+        with open(sidecar_path, encoding="utf-8") as f:
+            existing = merger.migrate_sidecar(json.load(f))
+    except (OSError, json.JSONDecodeError):
+        return True          # unreadable sidecar: nothing to protect
+    have = {k for k, v in (existing.get("sources") or {}).items() if v}
+    dropped = have - set(providing)
+    if not dropped:
+        return True
+    print(f"Error: {sidecar_path} already contains: {', '.join(sorted(dropped))}.")
+    print("   A fresh run rebuilds the site from only what it is given, so "
+          "that data would be lost.")
+    print("   Use --merge --input <archive> to add a newer Instagram export,")
+    print("   or --regenerate --flickr <path> to add or refresh Flickr,")
+    print(f"   or delete {sidecar_path} to start over deliberately.")
+    return False
+
+
 def main():
     """Main entry point for the Memento Mori CLI."""
     parser = argparse.ArgumentParser(
@@ -172,40 +242,30 @@ def main():
             print(f"Error: --regenerate requires {sidecar_path} (generate a site first).")
             return 1
         with open(sidecar_path, "r", encoding="utf-8") as f:
-            sidecar = json.load(f)
-        posts = sidecar.get("posts", {}) or {}
-        stories = sidecar.get("stories", {}) or {}
+            raw_sidecar = json.load(f)
+        # v1 sidecars are converted in memory; keep the original aside once
+        # before the v2 write replaces it.
+        if "sources" not in raw_sidecar:
+            merger.backup_v1_sidecar(output_dir)
+        sidecar = merger.migrate_sidecar(raw_sidecar)
+        sources = sidecar.get("sources") or {}
+
+        # Flickr: re-import when --flickr is given (the way to add Flickr to
+        # an existing site), else the sidecar's section carries forward as-is
+        if args.flickr:
+            ig_posts = (sources.get("instagram") or {}).get("posts") or {}
+            sources["flickr"] = _import_flickr_source(args, output_dir, ig_posts)
+
         data = {
-            "profile": sidecar["profile"],
-            "location": sidecar.get("location", {"location": "Unknown"}),
-            "posts": posts,
-            "stories": stories,
-            "date_range": sidecar.get("date_range") or merger.compute_date_range(posts),
-            "post_count": len(posts),
-            "story_count": len(stories),
+            "schema_version": merger.SCHEMA_VERSION,
+            "location": sidecar.get("location") or {"location": "Unknown"},
+            "sources": sources,
             "city_tags": city_tags,
         }
-        # Flickr: re-import when --flickr is given (the way to add Flickr to
-        # an existing site), else carry the sidecar's section forward
-        if args.flickr:
-            from memento_mori.flickr import import_flickr
-            print(f"\n📷 IMPORTING FLICKR from {args.flickr}")
-            data["flickr"] = import_flickr(
-                args.flickr, output_dir,
-                ig_timestamps=list(posts.keys()),
-                thread_count=args.threads,
-                quality=args.quality,
-                max_dimension=args.max_dimension,
-                api_key=os.environ.get("FLICKR_API_KEY"),
-                refresh=args.flickr_refresh,
-                verbose=args.verbose,
-            )
-        elif sidecar.get("flickr"):
-            data["flickr"] = sidecar["flickr"]
         if not args.gtag_id:
             args.gtag_id = (sidecar.get("settings") or {}).get("gtag_id")
         print(f"\n♻️  REGENERATE MODE")
-        print(f"   {len(posts)} posts, {len(stories)} stories from {sidecar_path}")
+        print(f"   {_describe_sources(sources)} from {sidecar_path}")
         generator = InstagramSiteGenerator(data, output_dir, gtag_id=args.gtag_id)
         if generator.generate():
             print("\n✅ PROCESS COMPLETE")
@@ -236,24 +296,60 @@ def main():
     # Initialize extractor with input path if specified
     extractor = InstagramArchiveExtractor(input_path=args.input)
 
-    # Handle input selection
-    # If input is explicitly provided, use that
+    # Handle input selection. Instagram is optional now: a run needs at
+    # least one source, and --flickr on its own is a complete site.
+    have_instagram = False
     if args.input:
         print(f"Using specified input: {args.input}")
-    # If auto-detect is not disabled, try to find an export
+        have_instagram = True
     elif not args.no_auto_detect:
         print(f"Auto-detecting Instagram archive in {args.search_dir}...")
         detected_archive = extractor.auto_detect_archive(search_dir=args.search_dir)
-        if not detected_archive:
-            print(
-                "No Instagram archive detected. Please specify an input file with --input."
-            )
+        if detected_archive:
+            print(f"Detected archive: {detected_archive}")
+            have_instagram = True
+        elif not args.flickr:
+            print("No Instagram archive detected. Specify one with --input,")
+            print("or pass --flickr <export> to build a Flickr-only site.")
             return 1
-        print(f"Detected archive: {detected_archive}")
-    # If no input and auto-detect disabled, raise error
-    else:
+    elif not args.flickr:
         print("Error: No input specified and auto-detection is disabled.")
-        print("Please provide an input path with --input.")
+        print("Please provide an input path with --input,")
+        print("or pass --flickr <export> to build a Flickr-only site.")
+        return 1
+
+    # Flickr-only: no Instagram archive to extract or process, so skip
+    # straight to importing Flickr and generating. (Pair --flickr with
+    # --no-auto-detect to force this when an Instagram zip is also present —
+    # which also avoids auto-detect opening every Flickr media zip.)
+    if not have_instagram:
+        if not _check_fresh_would_not_clobber(output_dir, {"flickr"}):
+            return 1
+        print("\n📷 FLICKR-ONLY MODE — building without an Instagram archive")
+        try:
+            flickr_source = _import_flickr_source(args, output_dir, {})
+        except FileNotFoundError as e:
+            print(f"\n❌ ERROR: {e}")
+            return 1
+        data = {
+            "schema_version": merger.SCHEMA_VERSION,
+            "location": {"location": "Unknown"},
+            "sources": {"flickr": flickr_source},
+            "city_tags": city_tags,
+        }
+        print("\n🌐 GENERATING WEBSITE")
+        generator = InstagramSiteGenerator(data, output_dir, gtag_id=args.gtag_id)
+        if generator.generate():
+            print("\n✅ PROCESS COMPLETE")
+            print(f"   Website generated at: {output_dir}")
+            print(f"   {_describe_sources(data['sources'])}")
+            return 0
+        print("\n❌ ERROR: Failed to generate website.")
+        return 1
+
+    if not args.merge and not _check_fresh_would_not_clobber(
+        output_dir, {"instagram"} | ({"flickr"} if args.flickr else set())
+    ):
         return 1
 
     try:
@@ -346,9 +442,6 @@ def main():
                 data["profile"]["profile_picture"] = existing["profile"].get(
                     "profile_picture", ""
                 )
-            data["date_range"] = merger.compute_date_range(data["posts"])
-            data["post_count"] = len(data["posts"])
-            data["story_count"] = len(data["stories"])
             # Reuse the previous run's gtag ID unless a new one was given
             if not args.gtag_id and existing["settings"].get("gtag_id"):
                 args.gtag_id = existing["settings"]["gtag_id"]
@@ -361,28 +454,39 @@ def main():
             if "stories" in data and media_result.get("updated_stories_data"):
                 data["stories"] = media_result["updated_stories_data"]
 
-        # Flickr: import when requested; in merge mode carry the existing
-        # site's section forward so an Instagram merge never drops it
+        # Assemble the source-shaped package. Instagram is whatever this run
+        # loaded and processed.
+        sources = {
+            "instagram": {
+                "profile": data["profile"],
+                "posts": data["posts"],
+                "stories": data.get("stories") or {},
+            }
+        }
+
+        # Every OTHER source the existing site had carries forward untouched.
+        # This generic loop is the point of the sources registry: a future
+        # importer needs no merge-path code to survive an Instagram merge.
+        if args.merge and existing:
+            for key, section in (existing.get("sources") or {}).items():
+                if key != "instagram" and section:
+                    sources[key] = section
+
+        # A --flickr import always wins over the carried-forward section
         if args.flickr:
-            from memento_mori.flickr import import_flickr
-            print(f"\n📷 IMPORTING FLICKR from {args.flickr}")
-            data["flickr"] = import_flickr(
-                args.flickr, output_dir,
-                ig_timestamps=list(data["posts"].keys()),
-                thread_count=args.threads,
-                quality=args.quality,
-                max_dimension=args.max_dimension,
-                api_key=os.environ.get("FLICKR_API_KEY"),
-                refresh=args.flickr_refresh,
-                verbose=args.verbose,
+            sources["flickr"] = _import_flickr_source(
+                args, output_dir, data["posts"]
             )
-        elif args.merge and existing and existing.get("flickr"):
-            data["flickr"] = existing["flickr"]
 
         # Generate website with the loaded data
         print("\n🌐 GENERATING WEBSITE")
-        data["city_tags"] = city_tags
-        generator = InstagramSiteGenerator(data, output_dir, gtag_id=args.gtag_id)
+        package = {
+            "schema_version": merger.SCHEMA_VERSION,
+            "location": data.get("location") or {"location": "Unknown"},
+            "sources": sources,
+            "city_tags": city_tags,
+        }
+        generator = InstagramSiteGenerator(package, output_dir, gtag_id=args.gtag_id)
         success = generator.generate()
 
         if success:

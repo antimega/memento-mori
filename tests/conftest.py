@@ -288,7 +288,8 @@ def _photo_json(pid, taken, privacy="public", name="", description="",
     return doc
 
 
-def make_flickr_export(root, with_media=True, with_zip=True, exclude_ids=()):
+def make_flickr_export(root, with_media=True, with_zip=True, exclude_ids=(),
+                       otd_date=None):
     """
     Build a Flickr export: metadata for public + non-public items, albums,
     account profile, and local media in both a folder and a zip part.
@@ -316,10 +317,13 @@ def make_flickr_export(root, with_media=True, with_zip=True, exclude_ids=()):
     }
     taken = "2018-06-01 10:00:00"
     collide_taken = "2018-06-02 11:22:33"
+    # Callers testing "On this day" pass a date on today's calendar day in a
+    # previous year, so the view always has a Flickr memory to show.
+    plain_taken = otd_date or taken
 
     records = {
         ids["plain"]: _photo_json(
-            ids["plain"], taken, name="A plain photo",
+            ids["plain"], plain_taken, name="A plain photo",
             description="Line one<br>Line two <a href=\"https://example.com\">link</a>",
             tags=["holiday", "beach"], albums=[7001], license_="All Rights Reserved",
         ),

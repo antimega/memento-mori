@@ -43,6 +43,29 @@ def read_data_json(output_dir):
     return json.loads((Path(output_dir) / "data.json").read_text(encoding="utf-8"))
 
 
+def source(output_dir, name):
+    """
+    One source section from the sidecar (schema v2), or {} when absent.
+
+    Tests go through here rather than indexing data["sources"][name] so that
+    what they assert is "the Flickr import contains X", not the shape of the
+    file it happens to live in.
+    """
+    return (read_data_json(output_dir).get("sources") or {}).get(name) or {}
+
+
+def flickr_items(output_dir):
+    return source(output_dir, "flickr").get("items") or {}
+
+
+def ig_posts(output_dir):
+    return source(output_dir, "instagram").get("posts") or {}
+
+
+def ig_stories(output_dir):
+    return source(output_dir, "instagram").get("stories") or {}
+
+
 def tree_files(output_dir, suffixes=None):
     out = []
     for p in sorted(Path(output_dir).rglob("*")):

@@ -26,7 +26,7 @@ Then, if you have a Flickr archive too, put it in `./flickr-download/` and run:
 docker compose run --rm memento-mori --regenerate --flickr ./flickr-download
 ```
 
-Full details for both are in [Getting your data](#getting-your-data) below.
+Either source works on its own — you can build a Flickr-only site with no Instagram export at all, and add Instagram later. Full details for both are in [Getting your data](#getting-your-data) below.
 
 ## ⚠️ IMPORTANT SECURITY WARNING ⚠️
 
@@ -151,7 +151,15 @@ Or import both sources in a single fresh run:
 FLICKR_API_KEY=yourkey docker compose run --rm memento-mori --input ./your-export-folder --flickr ./flickr-download
 ```
 
-> **Note:** a site is currently created from an Instagram archive — `--flickr` adds to an existing or in-progress build, so there's no Flickr-only mode yet.
+Or build a **Flickr-only site** with no Instagram archive at all:
+
+```bash
+FLICKR_API_KEY=yourkey docker compose run --rm memento-mori --no-auto-detect --flickr ./flickr-download
+```
+
+`--no-auto-detect` tells it not to go looking for an Instagram export. (If you have one in the folder and *don't* pass that flag, it builds a combined site instead.) It is also worth passing when your Flickr media parts live in the project folder, since auto-detection would otherwise open every one of them looking for an Instagram archive.
+
+You can add Instagram later with `--merge` — the site upgrades in place, keeps every Flickr link working, and starts using your Instagram profile for the site's name and bio.
 
 **About the media parts.** You don't have to download all of them. Every item's metadata contains a direct link to its original file, so the importer **downloads anything missing straight from Flickr's CDN** — politely rate-limited, resumable, and idempotent, so you can interrupt it and re-run. Downloading the parts by hand is faster for a big archive, and it is the only offline source for videos. Originals land in `flickr-download/originals-cache/` and are kept outside `output/`.
 
@@ -241,7 +249,7 @@ site in `./output`, a set of consistency checks against it (`pytest -m real`).
 ```
 Options:
 --input PATH             Path to an Instagram export (ZIP or folder). If omitted,
-                         auto-detection is used.
+                         auto-detection is used. Optional when --flickr is given.
 --output PATH            Output directory for the generated site [default: ./output]
 --flickr PATH            Path to a Flickr export folder to import as a separate
                          section (combine with --regenerate to add Flickr to an

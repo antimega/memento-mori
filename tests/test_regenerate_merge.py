@@ -13,7 +13,13 @@ import sys
 import pytest
 
 from tests.conftest import make_flickr_export, make_instagram_export, write_api_cache
-from tests.helpers import mask_dates, read_data_json, tree_files
+from tests.helpers import (
+    flickr_items,
+    ig_posts,
+    mask_dates,
+    read_data_json,
+    tree_files,
+)
 
 
 def _cli(*args):
@@ -82,8 +88,7 @@ def test_regenerate_without_the_flickr_input(site):
     shutil.rmtree(site["flickr"])
     assert _cli("--output", site["out"], "--regenerate") == 0
 
-    data = read_data_json(site["out"])
-    assert len(data["flickr"]["items"]) == 8
+    assert len(flickr_items(site["out"])) == 8
     for page in ("flickr.html", "tags.html", "albums.html", "js/flickr-data.js"):
         assert (site["out"] / page).exists(), f"{page} lost on regenerate"
 
@@ -122,8 +127,8 @@ def test_merge_adds_new_posts_and_keeps_flickr(site, tmp_path):
     The upgrade path: a newer export folds in without disturbing what is
     already there — and without dropping the Flickr section.
     """
-    before = read_data_json(site["out"])
-    before_posts = set(before["posts"])
+    before_flickr = flickr_items(site["out"])
+    before_posts = set(ig_posts(site["out"]))
 
     newer = tmp_path / "ig-export-2"
     newer.mkdir()
@@ -137,11 +142,11 @@ def test_merge_adds_new_posts_and_keeps_flickr(site, tmp_path):
 
     assert _cli("--input", newer, "--output", site["out"], "--merge") == 0
 
-    after = read_data_json(site["out"])
-    assert set(after["posts"]) == before_posts | {str(new_ts)}
-    assert after["post_count"] == len(after["posts"])
-    assert len(after["flickr"]["items"]) == 8, "merge dropped the Flickr section"
-    assert after["flickr"]["items"] == before["flickr"]["items"]
+    after_posts = ig_posts(site["out"])
+    assert set(after_posts) == before_posts | {str(new_ts)}
+    after_flickr = flickr_items(site["out"])
+    assert len(after_flickr) == 8, "merge dropped the Flickr section"
+    assert after_flickr == before_flickr, "merge altered the Flickr section"
 
 
 def test_merge_requires_input(site):

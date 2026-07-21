@@ -1,13 +1,19 @@
-// "On this day" view for the timeline page: posts and stories from today's
-// calendar day (month + day) in previous years. Fully client-side and live —
-// it uses the browser's current date, so it stays correct without
-// regenerating the site.
+// "On this day" view for the timeline page: items from today's calendar day
+// (month + day) in previous years, across every imported source. Fully
+// client-side and live — it uses the browser's current date, so it stays
+// correct without regenerating the site.
 //
 // Matches are computed from the data files (cheap key scan, no DOM traversal)
 // and the view's DOM is built on the first toggle from the same data, via the
-// shared mmTiles builder — the matching timeline tiles are prior-year by
+// shared mmTiles builders — the matching timeline tiles are prior-year by
 // definition and (post month-on-demand rework) generally not in the DOM to
 // clone, so we build fresh rather than clone.
+//
+// Sources are described by the PROVIDERS array below. Adding a source to this
+// view is one entry: where its data lives, how to read an item's timestamp,
+// how to build and open a tile. Note that providers differ in how they key
+// their data — Instagram is keyed by timestamp, Flickr by photo id with the
+// timestamp inside the entry — which is exactly why `timeOf` is a hook.
 document.addEventListener('DOMContentLoaded', function () {
     var container = document.getElementById('onThisDay');
     var btnTimeline = document.getElementById('viewTimeline');
@@ -18,79 +24,123 @@ document.addEventListener('DOMContentLoaded', function () {
         return;
     }
 
+    var PROVIDERS = [
+        {
+            key: 'posts',
+            data: function () { return window.postData; },
+            timeOf: function (key) { return parseInt(key, 10); },
+            tile: function (key, entry) { return window.mmTiles.post(key, entry); },
+            strip: ['grid-item'],
+            add: ['otd-tile'],
+            open: function (tile, key) {
+                // openStory live-queries .story-item and navigatePost walks
+                // .grid-item — both hit index -1 unless the item's real month
+                // exists, so build it (hidden) first.
+                if (window.mmEnsureMonthFor) window.mmEnsureMonthFor(key);
+                var index = parseInt(tile.getAttribute('data-index'), 10);
+                if (window.mmOpenPost) window.mmOpenPost(index);
+            },
+            rowClass: 'timeline-posts',
+        },
+        {
+            key: 'stories',
+            data: function () { return window.storiesData; },
+            timeOf: function (key) { return parseInt(key, 10); },
+            tile: function (key, entry) { return window.mmTiles.story(key, entry); },
+            // No otd-tile here: it forces aspect-ratio 1/1, and story tiles
+            // are 9:16. .timeline-story-tile already styles them fully.
+            strip: ['story-item'],
+            add: [],
+            open: function (tile, key) {
+                if (window.mmEnsureMonthFor) window.mmEnsureMonthFor(key);
+                var index = parseInt(tile.getAttribute('data-index'), 10);
+                if (window.mmOpenStory) window.mmOpenStory(index);
+            },
+            rowClass: 'timeline-stories',
+        },
+        {
+            key: 'flickr',
+            data: function () { return window.flickrData; },
+            // Flickr entries are keyed by photo id, not timestamp — the date
+            // lives in the entry itself.
+            timeOf: function (key, entry) { return entry.t; },
+            tile: function (key, entry) { return window.mmTiles.flickr(key, entry); },
+            // Also drop flickr-tile: flickr-viewer.js delegates on it at the
+            // document level, which would fire alongside our own handler.
+            strip: ['grid-item', 'flickr-tile'],
+            add: ['otd-tile'],
+            open: function (tile, key) {
+                // No mmEnsureMonthFor here: openFlickr resolves and builds
+                // its own month via mmMonthKeyOfTarget/mmBuildMonth.
+                if (window.mmOpenFlickr) window.mmOpenFlickr(key);
+            },
+            // Same row class the timeline uses for its Flickr row
+            rowClass: 'timeline-posts',
+        },
+    ];
+
     // Match the server's day grouping, which uses UTC (utcfromtimestamp)
     var today = new Date();
     var todayMonth = today.getUTCMonth();
     var todayDay = today.getUTCDate();
     var todayYear = today.getUTCFullYear();
 
-    // Bucket matching timestamps by year (previous years only), straight
-    // from the loaded data — no DOM work at load time
+    // Bucket matching keys by year (previous years only), straight from the
+    // loaded data — no DOM work at load time
     var byYear = {};
     var total = 0;
 
-    function scan(data, isStory) {
-        if (!data) return;
-        Object.keys(data).forEach(function (ts) {
-            var d = new Date(parseInt(ts, 10) * 1000);
+    PROVIDERS.forEach(function (provider) {
+        var data = provider.data();
+        if (!data) return;                       // source not imported
+        Object.keys(data).forEach(function (key) {
+            var t = provider.timeOf(key, data[key]);
+            if (!t) return;
+            var d = new Date(t * 1000);
             if (d.getUTCMonth() !== todayMonth || d.getUTCDate() !== todayDay) return;
             var year = d.getUTCFullYear();
             if (year >= todayYear) return;
-            var bucket = byYear[year] || (byYear[year] = { posts: [], stories: [] });
-            (isStory ? bucket.stories : bucket.posts).push(ts);
+            var bucket = byYear[year] || (byYear[year] = {});
+            (bucket[provider.key] || (bucket[provider.key] = [])).push({ key: key, t: t });
             total++;
         });
-    }
-    scan(window.postData, false);
-    scan(window.storiesData, true);
+    });
+
+    Object.keys(byYear).forEach(function (year) {
+        // Newest-first within a year, matching the timeline's ordering
+        Object.keys(byYear[year]).forEach(function (k) {
+            byYear[year][k].sort(function (a, b) { return b.t - a.t; });
+        });
+    });
 
     var years = Object.keys(byYear).map(Number).sort(function (a, b) { return b - a; });
-    years.forEach(function (year) {
-        // Newest-first within a year, matching the timeline's ordering
-        var newestFirst = function (a, b) { return parseInt(b, 10) - parseInt(a, 10); };
-        byYear[year].posts.sort(newestFirst);
-        byYear[year].stories.sort(newestFirst);
-    });
     if (total) {
-        btnOnThisDay.textContent = 'On this day (' + total + ')';
+        btnOnThisDay.textContent = 'On this day (' + total.toLocaleString() + ')';
     }
 
-    function buildTile(ts, isStory) {
-        var data = isStory ? window.storiesData : window.postData;
-        var entry = data && data[ts];
+    function buildTile(provider, item) {
+        var data = provider.data();
+        var entry = data && data[item.key];
         if (!entry || !window.mmTiles) return null;
-        var tile = isStory ? window.mmTiles.story(ts, entry) : window.mmTiles.post(ts, entry);
-        if (isStory) {
-            tile.classList.remove('story-item');         // keep viewers from binding
-        } else {
-            tile.classList.remove('grid-item');
-            tile.classList.add('otd-tile');              // restyle without grid-item
-        }
-        // Not the real tile: drop data-timestamp so it can't shadow the real
-        // one in month-nav's deep-link lookup, and handle clicks ourselves.
+        var tile = provider.tile(item.key, entry);
+        if (!tile) return null;
+        provider.strip.forEach(function (cls) { tile.classList.remove(cls); });
+        provider.add.forEach(function (cls) { tile.classList.add(cls); });
+        // Not the real tile: drop the identifiers the deep-link lookups use,
+        // so a clone can never shadow the real tile.
         tile.removeAttribute('data-timestamp');
         tile.addEventListener('click', function (e) {
             e.preventDefault();
-            var index = parseInt(tile.getAttribute('data-index'), 10);
-            // Build the item's real month first (hidden) so the in-place
-            // viewers can find the real tile: openStory live-queries
-            // .story-item and navigatePost walks .grid-item — both hit index
-            // -1 without it.
-            if (window.mmEnsureMonthFor) window.mmEnsureMonthFor(ts);
-            if (isStory) {
-                if (window.mmOpenStory) window.mmOpenStory(index);
-            } else {
-                if (window.mmOpenPost) window.mmOpenPost(index);
-            }
+            provider.open(tile, item.key);
         });
         return tile;
     }
 
-    function buildRow(timestamps, rowClass, isStory) {
+    function buildRow(provider, items) {
         var row = document.createElement('div');
-        row.className = rowClass;
-        timestamps.forEach(function (ts) {
-            var tile = buildTile(ts, isStory);
+        row.className = provider.rowClass;
+        items.forEach(function (item) {
+            var tile = buildTile(provider, item);
             if (tile) row.appendChild(tile);
         });
         return row;
@@ -119,12 +169,12 @@ document.addEventListener('DOMContentLoaded', function () {
             heading.textContent = year + ' · ' + ago + (ago === 1 ? ' year ago' : ' years ago');
             section.appendChild(heading);
 
-            if (byYear[year].posts.length) {
-                section.appendChild(buildRow(byYear[year].posts, 'timeline-posts', false));
-            }
-            if (byYear[year].stories.length) {
-                section.appendChild(buildRow(byYear[year].stories, 'timeline-stories', true));
-            }
+            PROVIDERS.forEach(function (provider) {
+                var items = byYear[year][provider.key];
+                if (items && items.length) {
+                    section.appendChild(buildRow(provider, items));
+                }
+            });
             container.appendChild(section);
         });
     }

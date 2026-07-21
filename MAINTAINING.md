@@ -19,11 +19,10 @@ thumbnails. Design constraints that shape everything:
 - **Works over `file://` and `http://`.** No `fetch`, no ES modules, no dynamic
   import in the published pages — data is loaded via classic `<script>` files
   that assign `window.postData` / `window.storiesData` / `window.flickrData`.
-- **Either source may be absent.** Every page's nav row for a missing service
-  hides itself (`has_instagram` / `has_flickr` / `has_cities` in
-  `_page_context`). Note the one asymmetry: a *fresh* build still requires an
-  Instagram archive — `--flickr` adds to an existing or in-progress build, so
-  there is no Flickr-only mode yet.
+- **Any subset of sources.** A site can be built from Instagram, from Flickr,
+  or from both; nav rows for absent sources hide themselves, and `index.html`
+  becomes a redirect stub when Instagram is not present (see §3z). Sources are
+  a registry, not a pair of special cases.
 - **Vendored libraries** (Leaflet 1.9.4, marked 12.0.2) under
   `static/vendor/` — no CDN.
 
@@ -108,6 +107,58 @@ Stages (`memento_mori/`):
 ---
 
 ## 3. Data artifacts
+
+### 3z. The sources registry (schema v2) — read this first
+
+Everything imported lives under `sources`, keyed by importer name. This is
+what makes a site buildable from *any* subset of sources, Flickr-only
+included, and what makes adding a third source additive rather than another
+round of scattered conditionals.
+
+```json
+{ "schema_version": 2,
+  "location": {"location": "Unknown"},
+  "sources": {
+    "instagram": { "profile": {…}, "posts": {…}, "stories": {…} },
+    "flickr":    { "profile": {…}, "items": {…}, "albums": {…}, "meta": {…} }
+  },
+  "settings": { "gtag_id": …, "generated_at": …, "schema_version": 2 } }
+```
+
+Three rules follow from it:
+
+- **Identity is derived, never stored.** The site's username/bio/website come
+  from the first source profile along `SOURCE_PRIORITY` (`merger.site_identity`),
+  computed on every render. A stored copy could go stale the moment a source
+  was added, refreshed, or removed. The `city_tags.json` tri-state `bio`
+  override still sits on top.
+- **Nothing derivable is persisted.** `post_count`, `story_count` and
+  `date_range` left the sidecar — counts are computed in `_page_context`, and
+  no template ever consumed `date_range`. Duplicated state that can drift is
+  worse than a cheap recount.
+- **Migration is automatic.** `merger.migrate_sidecar` converts any v1 sidecar
+  in memory on load, and `backup_v1_sidecar` copies the original to
+  `data.v1.bak.json` **once** before the first v2 write. The generator also
+  migrates its input package, so a caller holding v1 data still works. Verified
+  lossless on the real archive: 6,283 posts / 6,062 stories / 30,335 Flickr
+  items / 148 albums identical across the migration, and every generated HTML
+  page byte-identical.
+
+**Adding a source** (the checklist this restructure exists for):
+
+| Layer | What to add |
+|---|---|
+| Importer | A module returning a `sources.<key>` section, optionally with a `profile` |
+| `cli.py` | A flag, plus a branch in the collection step |
+| `generator.py` | `SOURCE_PRIORITY` entry, a `_nav_row_<key>` builder listed in `NAV_ROW_BUILDERS`, page generators, a browser-data writer, timeline day-bucket + tile ctx |
+| Templates | Its pages, its timeline section, its tile markup (**parity contract** — see §5) |
+| JS | `mmTiles.<key>` builder, a viewer, an `on-this-day.js` PROVIDERS entry |
+| `merger.py` | **Nothing.** Non-Instagram sources are carried through `--merge` by a generic loop |
+
+**The clobber guard.** A fresh run rebuilds `data.json` from only what it was
+given, so `_check_fresh_would_not_clobber` refuses when the existing sidecar
+holds sources this run doesn't provide. Before it existed, a plain Instagram
+rebuild over a combined site silently dropped the entire Flickr section.
 
 | File | Purpose | Browser-loaded? |
 |---|---|---|
