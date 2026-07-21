@@ -19,8 +19,25 @@ dependencies = [
     "tqdm==4.67.1"
 ]
 
+[project.optional-dependencies]
+# Core suite: runs anywhere the app runs (including inside the Docker image).
+test = ["pytest>=8.0"]
+# Browser smoke layer: runs on a host/CI with a real Chromium, NOT in the image.
+browser = ["pytest>=8.0", "pytest-playwright>=0.5"]
+
 [tool.setuptools]
 packages = ["memento_mori"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# The browser layer needs Playwright + a downloaded Chromium, and the real
+# layer needs the maintainer's own generated site. Neither is available in a
+# plain checkout, so both are opt-in: `pytest -m browser`, `pytest -m real`.
+addopts = "-m 'not browser and not real'"
+markers = [
+    "browser: end-to-end smoke tests driving a real browser (needs pytest-playwright)",
+    "real: characterization tests against the maintainer's real ./output site",
+]
 
 [project.scripts]
 memento-mori = "memento_mori.cli:main"
