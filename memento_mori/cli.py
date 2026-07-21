@@ -145,6 +145,9 @@ def main():
             "posts": raw_tags.get("posts", {}) or {},
             "stories": raw_tags.get("stories", {}) or {},
             "cities": raw_tags.get("cities", {}) or {},
+            # Tri-state: absent (None) means "no override — use the
+            # Instagram profile bio"; present (even "") is authoritative
+            "bio": raw_tags["bio"] if "bio" in raw_tags else None,
             "favorites": {
                 "posts": raw_favorites.get("posts", {}) or {},
                 "stories": raw_favorites.get("stories", {}) or {},

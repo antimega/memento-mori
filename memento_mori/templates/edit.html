@@ -14,7 +14,6 @@
     <header>
       <div class="header-content">
         <a href="index.html" class="logo">Memento Mori — Editor</a>
-        <div class="date-range-header">{{ date_range }}</div>
       </div>
     </header>
     <main>
@@ -29,6 +28,12 @@
         ★&nbsp;Favourite mode to mark favourites — they appear first in each
         city's section. Changes are kept in this browser until you export them.</p>
         <p><a href="index.html">← Back to the site</a></p>
+      </div>
+
+      <div class="editor-bio">
+        <label for="bioInput">Profile description</label>
+        <textarea id="bioInput" rows="2"
+                  placeholder="Shown at the top of every page"></textarea>
       </div>
 
       <div class="editor-panel" id="editorPanel">

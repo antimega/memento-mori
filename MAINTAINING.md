@@ -8,15 +8,22 @@ hard way. README.md is the user-facing guide; this is the maintainer's guide.
 
 ## 1. What it is
 
-A Python static-site generator that turns an Instagram data export into a
-browsable static website. Output is plain HTML + classic `<script>` files +
-JSON + generated thumbnails. Design constraints that shape everything:
+A Python static-site generator that turns personal photo-service exports into a
+browsable static website. Two sources are supported and coexist in one site:
+**Instagram** (posts + stories) and **Flickr** (public photos/videos, tags,
+albums). Output is plain HTML + classic `<script>` files + JSON + generated
+thumbnails. Design constraints that shape everything:
 
 - **No framework, no build step.** The published site is a folder of HTML and
   classic scripts. It must keep working from a bare filesystem years from now.
 - **Works over `file://` and `http://`.** No `fetch`, no ES modules, no dynamic
   import in the published pages — data is loaded via classic `<script>` files
-  that assign `window.postData` / `window.storiesData`.
+  that assign `window.postData` / `window.storiesData` / `window.flickrData`.
+- **Either source may be absent.** Every page's nav row for a missing service
+  hides itself (`has_instagram` / `has_flickr` / `has_cities` in
+  `_page_context`). Note the one asymmetry: a *fresh* build still requires an
+  Instagram archive — `--flickr` adds to an existing or in-progress build, so
+  there is no Flickr-only mode yet.
 - **Vendored libraries** (Leaflet 1.9.4, marked 12.0.2) under
   `static/vendor/` — no CDN.
 
@@ -30,12 +37,17 @@ Run in Docker (the generator's deps aren't on the host):
 docker compose run --rm memento-mori --regenerate
 ```
 
-`docker-compose.yml`: `working_dir: /app/workspace`, `PYTHONPATH=/app`, and a
-default `command: --search-dir . --output ./output`. **Any args you pass to
+`docker-compose.yml`: `working_dir: /app/workspace`, `PYTHONUNBUFFERED=1`, a
+`FLICKR_API_KEY=${FLICKR_API_KEY:-}` passthrough, and a default
+`command: --search-dir . --output ./output`. **Any args you pass to
 `docker compose run` REPLACE `command:`** — that's why `--regenerate` alone
-still finds input/output (the entrypoint has its own defaults). To run Python
-directly in the container (e.g. for a one-off check):
-`docker compose run --rm --entrypoint python memento-mori <script>.py`.
+still finds input/output (the CLI defaults do the right thing on their own).
+The `volumes:` block mounts the project folder at `/app/workspace`, plus the
+external disk holding the Flickr zips and `originals-cache` **at the same
+absolute path as on the host** so symlinks resolve inside the container (see
+the external-disk gotcha in §8). The scratchpad directory is *not* mounted —
+one-off scripts must live in the project folder. To run Python directly in the
+container: `docker compose run --rm --entrypoint python memento-mori <script>.py`.
 
 Stages (`memento_mori/`):
 
@@ -43,7 +55,13 @@ Stages (`memento_mori/`):
   `--search-dir`, `--threads`, `--quality`, `--max-dimension`,
   `--thumbnail-size`, `--no-auto-detect`, `--gtag-id`, `--merge`,
   `--city-tags` (defaults to `<output>/city_tags.json`), `--regenerate`,
-  `--verbose`/`-v`.
+  `--flickr PATH`, `--flickr-refresh`, `--verbose`/`-v`. Three mutually
+  exclusive modes: **fresh** (extract + process + generate), **`--merge`**
+  (requires `--input`; folds a new export into `output/`), and
+  **`--regenerate`** (rejects `--merge`/`--input`; re-renders from
+  `output/data.json`). `--flickr` composes with fresh and regenerate; on a
+  plain `--regenerate` the sidecar's existing `flickr` key is carried
+  forward untouched, and an Instagram `--merge` does the same.
 - **`extractor.py`** — locates/unzips the Instagram export.
 - **`loader.py`** — parses the Instagram JSON. Handles both the **classic**
   format (`posts_1.json`) and the **new** format (`posts.json` with
@@ -71,8 +89,21 @@ Stages (`memento_mori/`):
   - `_compact_entries` — drops empty optional fields (`pl,tt,im,l,c,la,lo`)
     before serialization; always keeps `i,m,t,d,story_thumb`.
   - `_write_browser_data` — writes `js/posts-data.js` + `js/stories-data.js`
-    (see §3). Browser-only enrichment (`th`/`dm`) happens here.
+    (see §3). Browser-only enrichment (`th`/`dm`/`vp`) happens here.
+  - `_write_flickr_browser_data` — the same for `js/flickr-data.js`, which
+    also carries `window.flickrAlbums` (the album-id → title map that
+    `albums.js` and the viewer read).
+  - `_as_json_parse` — module-level, shared by both writers: emits
+    `JSON.parse("…")` with `</` escaped (see §3).
+  - `_page_context` — the context every page's `_header`/`_nav`/`_footer`
+    share: counts, `has_*` flags, `insta_years`/`flickr_years`
+    (`_year_span`), `flickr_alias`, the resolved `bio`, `generation_date`.
+    **Add nav data here, not per-page.**
   - `_write_data_json` — writes the `data.json` sidecar (pops `city_tags`).
+  - Jinja filter **`commas`** (`f"{n:,}"`) — registered in `__init__`. Every
+    user-visible count in the nav and the tags/albums filter placeholders
+    uses it; the JS-built equivalents use `.toLocaleString()`. Keep new
+    counts consistent with both.
 
 ---
 
@@ -81,9 +112,10 @@ Stages (`memento_mori/`):
 | File | Purpose | Browser-loaded? |
 |---|---|---|
 | `data.json` | full sidecar for `--merge`/`--regenerate`; keeps `story_thumb`; `city_tags` popped out | **No** |
-| `js/posts-data.js` | `window.postData = JSON.parse("…")` | Yes (index, timeline, cities) |
-| `js/stories-data.js` | `window.storiesData = JSON.parse("…")` | Yes (stories, timeline, cities) |
-| `city_tags.json` | human annotations: tags, favourites, per-city coords + Markdown | loaded only into the editor pages as an inline embed |
+| `js/posts-data.js` | `window.postData = JSON.parse("…")` — ~2.3 MB | Yes (index, timeline, cities) |
+| `js/stories-data.js` | `window.storiesData = JSON.parse("…")` — ~1.4 MB | Yes (stories, timeline, cities) |
+| `js/flickr-data.js` | `window.flickrData` + `window.flickrAlbums` — **~9 MB** at 30k items | Yes (flickr, tags, albums, timeline) |
+| `city_tags.json` | human annotations: bio, tags, favourites, per-city coords + Markdown | loaded only into the editor pages as an inline embed |
 
 **The `JSON.parse` trick.** The data files are emitted as
 `window.postData = JSON.parse(<a JS string literal>)`, where the string is
@@ -155,9 +187,23 @@ Instagram `--merge`; restored by plain `--regenerate`; re-imported by
   <id>.<ext>`, so the rest of the pipeline only ever sees real Paths. Folder
   files win over zip members for the same id.
 
+**Shared page chrome:** `_header.html` (masthead: plain-text site title —
+it used to link off-site — plus the profile bio), `_nav.html` (the three-row
+navigation: overview
+row, then one row per imported service with a data-driven label —
+`Instagram <username> (years):` / `Flickr <alias> (years):` — each row
+hidden when its import is absent; include with `{% set active_page %}`
+first) and `_footer.html`. All seven public templates include both; the
+editor pages have their own minimal chrome (their logo still links back to index.html). The header and footer are white full-bleed bands whose inner `.header-content`/`.footer-content` share `<main>`'s max-width and padding, so the title, page content and footer all sit on one left edge; the header is **static** (it holds no nav, and a fixed one would pin the bio permanently). The profile **bio** shown at
+the top is the Instagram bio unless `city_tags.json` carries a `bio` key
+(tri-state: absent = no override, present — even empty — is
+authoritative); it is editable from edit.html and travels through the
+editor's overlay/export like everything else.
+
 **`city_tags.json` shape:**
 ```json
 { "version": 1,
+  "bio": "optional site bio override",
   "posts":   { "<ts>": "City" },
   "stories": { "<ts>": "City" },
   "cities":  { "City": { "lat": 0.0, "lng": 0.0, "text": "**Markdown**" } },
@@ -173,8 +219,10 @@ by **index**, deep links via `?post=`/`?story=`, UTC date basis throughout.
 
 - **`index.html`** — posts grid. Server-renders **all** post tiles (via
   `grid.html`). Loads `posts-data.js` + `modal.js` + vendored Leaflet (all
-  deferred; Leaflet powers the modal's per-post location map). Sort buttons
-  (Newest/Oldest/Popular/…) reorder tiles in place. Deep link `?post=TS[&image=N]`.
+  deferred; Leaflet powers the modal's per-post location map). Sort buttons —
+  **Newest / Oldest / Random only** — reorder tiles in place. (The old Most
+  Likes / Most Comments / Most Views buttons were removed: never wired up,
+  and the counts are empty in this archive.) Deep link `?post=TS[&image=N]`.
 
 - **`stories.html`** (from template `stories_page.html`) — stories grid.
   Server-renders **all** story tiles. Loads `stories-data.js` + `stories.js`.
@@ -239,11 +287,15 @@ by **index**, deep links via `?post=`/`?story=`, UTC date basis throughout.
   tags.html (`albums.js` mirrors `tags.js` — change them in step): 148
   album chips (newest activity first, filterable), progressive per-album
   grid, hash-linkable `#album=<id>`, viewer prev/next scoped via
-  `mmFlickrOrder`. The viewer's tag and album chips sit under small "Tags"/"Albums"
-  section labels (`.flickr-section-label`, hidden when empty); its album
-  links point here (chip-styled,
-  chip-styled, same-document switch on this page) rather than at
-  flickr.com.
+  `mmFlickrOrder`. The viewer's tag and album chips sit under small
+  "Tags"/"Albums" section labels (`.flickr-section-label`, hidden when
+  empty); its album links point here (chip-styled, a same-document switch
+  when already on this page) rather than at flickr.com.
+
+  Both navigators format counts with `.toLocaleString()` in **three** spots —
+  the chip count, the `<h2>` heading, and (server-side, via the `commas`
+  filter) the filter placeholder. Change them together or the same number
+  renders two different ways on one screen.
 
 - **`edit.html` + `edit-cities.html`** — the private tagging/favourites/city-text
   editor. **Loads no data files** — it embeds `window.cityTags` and renders tiles
@@ -317,6 +369,20 @@ and by inter-tag whitespace — both harmless. Post tiles are otherwise identica
 - One stylesheet: `static/css/style.css`. No page carries its own `<style>`
   block anymore, and no inline `style="…"` attributes remain except Leaflet's
   own runtime styles and one JS-toggled `display:none` on the story play icon.
+- **Vertical alignment is load-bearing.** `header`/`footer` are white
+  full-bleed bands; their inner `.header-content`/`.footer-content` share
+  `<main>`'s `max-width: 975px` + `padding: 0 20px`, so the site title, bio,
+  page content, and footer all land on one left edge. Change the measure in
+  one place and all three must follow. The header is deliberately **static**,
+  not fixed — it now holds the bio, which a fixed header would pin to the
+  viewport forever. (The old `--header-height` variable is gone.)
+- **The three-row nav is one CSS grid.** `.nav-rows` is
+  `grid-template-columns: repeat(4, max-content)`; each `.nav-row` is
+  `display: contents` so its cells join the *parent* grid — that's what makes
+  the links line up in columns across rows (days above posts above photos).
+  A `.nav-service-label` pins column 1; row 1 emits an empty label cell to
+  keep its links in the same columns. Under 600px the whole thing flips to
+  flex columns, where `display:contents` would break the layout.
 - Story styling is a **single source of truth**: a shared `.story-item` base;
   the timeline/cities story tiles layer `.timeline-story-tile` on top; the
   stories-page grid tiles use scoped `.stories-grid .story-item` /
@@ -335,10 +401,32 @@ Regenerate, then `python3 -m http.server` in `output/`. The in-app browser pane
 caches assets aggressively — **serve on a fresh port** (or cache-bust) after a
 CSS/JS change or you'll test stale files.
 
-**Artifacts.** `timeline.html` ≤ ~150 KB with exactly one `.timeline-month`
-div and a full `<select>`; `data.json` contains no `th`/`dm`; a `posts-data.js`
-entry has `th` and `thumbnails/<th>.webp` exists; no `<style>` blocks or
-`profile-picture` markup in any output HTML.
+**Artifacts.** Reference sizes for the current archive (6,283 posts / 30,335
+flickr items): `timeline.html` ~69 KB with exactly one `.timeline-month` div
+and a full `<select>`; `flickr.html` ~24 KB; `tags.html` / `albums.html`
+~4.3 KB each (pure shells — everything is client-built); `index.html` ~1.8 MB
+and `stories.html` ~2.6 MB (both server-render every tile, by design).
+`data.json` contains no `th`/`dm`/`vp`; a `posts-data.js` entry has `th` and
+`thumbnails/<th>.webp` exists; no `<style>` blocks or `profile-picture` markup
+in any output HTML.
+
+**Page chrome (every public page).** Masthead shows the plain-text title +
+bio and does *not* link off-site; the title, nav, content, and footer all
+share one left edge at desktop and at <600px; the active page's nav link
+carries `.active` + `aria-current="page"`; a service row disappears entirely
+when its import is absent (test by regenerating from a sidecar with the
+`flickr` key removed); the footer credits both repos. All counts ≥1,000 show
+thousands separators — nav, tags/albums filter placeholders, chips, and
+headings alike.
+
+**Tags / albums navigators.** Chips render count-sorted (tags) or
+newest-activity-first (albums); the filter box hides non-matching chips;
+selecting a chip swaps the grid, updates the `<h2>`, and writes
+`#tag=`/`#album=`; a deep link opens straight to that selection; an unknown
+hash falls back to the first chip with no error; the viewer's prev/next
+cycles *within* the selection (`mmFlickrOrder`), and a tag chip inside the
+viewer navigates to `tags.html#tag=…` — closing the viewer first when
+already on that page.
 
 **Timeline.** Newest month paints; DOM ~600 nodes; switching months builds +
 shows exactly one panel with no duplicates; ←/→ disable at the extremes;
@@ -465,6 +553,11 @@ verify each. Keep the viewport fixed between captures.
   `<video>.currentSrc` and save as `data-download-manual/video_<id>.mp4`
   (any `data-download-*` folder; the id suffix is what matters). The viewer
   treats `.swf`//apps/video/ `vu` values as unplayable (poster + link).
+- **Zero-byte outputs are "done" forever unless you check.** An interrupted
+  run left 7 empty `.webp` files that every later run happily skipped. The
+  converter now writes to a temp file and atomically renames, and
+  `_missing()` treats a 0-byte file as missing. Any new skip-if-exists
+  cache needs the same two guards.
 - **A few 2004–06 originals are truncated on Flickr itself** (short by a
   few tail bytes, identically in CDN and export). The converter sets PIL's
   `LOAD_TRUNCATED_IMAGES` to salvage them rather than dropping them.
@@ -492,8 +585,9 @@ verify each. Keep the viewport fixed between captures.
 - **modal.js's `.grid-item` delegation must skip `.flickr-tile`** — flickr
   tiles share the grid styling classes but have no `data-index`; without the
   guard, clicking one calls `openModal(NaN)`.
-- **`templates/stories.html` is unused** but `flickr.html` is not —
-  don't confuse them when grepping.
+- **The editor's bio box is in-flow, not a panel.** `.editor-panel` is
+  `position: fixed`; reusing it for the bio textarea turned it into a
+  floating overlay. It has its own `.editor-bio` rule for this reason.
 
 ---
 
@@ -504,12 +598,13 @@ memento_mori/
   cli.py extractor.py loader.py media.py merger.py file_mapper.py generator.py
   flickr.py   (Flickr importer: loader, dedup, API client, downloader/processor)
   templates/  index.html grid.html stories_page.html timeline.html cities.html
-              flickr.html edit.html edit-cities.html
+              flickr.html tags.html albums.html edit.html edit-cities.html
+              _header.html _nav.html _footer.html          (shared chrome)
               _post_modal.html _story_viewer.html _flickr_viewer.html
-              (stories.html — unused)
+              (stories.html — UNUSED; the stories page is stories_page.html)
   static/js/  posts-data*/stories-data*/flickr-data* (generated at build)
               modal.js stories.js month-nav.js timeline-months.js on-this-day.js
-              flickr-grid.js flickr-viewer.js
+              flickr-grid.js flickr-viewer.js tags.js albums.js
               editor-common.js editor.js editor-cities.js
   static/css/ style.css
   static/vendor/ leaflet/ marked/

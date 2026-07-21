@@ -17,6 +17,7 @@ window.MMEditor = (function () {
         base.posts = base.posts || {};
         base.stories = base.stories || {};
         base.cities = base.cities || {};
+        base.bio = base.bio || '';   // effective site bio (embedded)
         base.favorites = base.favorites || {};
         base.favorites.posts = base.favorites.posts || {};
         base.favorites.stories = base.favorites.stories || {};
@@ -55,6 +56,10 @@ window.MMEditor = (function () {
                 delete overlay.cityText[name];
             }
         });
+        if (Object.prototype.hasOwnProperty.call(overlay, 'bio')
+                && overlay.bio === base.bio) {
+            delete overlay.bio;
+        }
 
         persist();
         return true;
@@ -123,6 +128,23 @@ window.MMEditor = (function () {
         return Object.prototype.hasOwnProperty.call(overlay.cityText, name);
     }
 
+    // ---- profile bio ----
+
+    function effectiveBio() {
+        if (Object.prototype.hasOwnProperty.call(overlay, 'bio')) {
+            return overlay.bio;
+        }
+        return base.bio;
+    }
+
+    function setBio(text) {
+        if (text === base.bio) {
+            delete overlay.bio;
+        } else {
+            overlay.bio = text;
+        }
+    }
+
     // ---- derived state ----
 
     function cityNames() {
@@ -172,7 +194,8 @@ window.MMEditor = (function () {
             + Object.keys(overlay.stories).length
             + Object.keys(overlay.favorites.posts).length
             + Object.keys(overlay.favorites.stories).length
-            + Object.keys(overlay.cityText).length;
+            + Object.keys(overlay.cityText).length
+            + (Object.prototype.hasOwnProperty.call(overlay, 'bio') ? 1 : 0);
     }
 
     // ---- export ----
@@ -180,6 +203,10 @@ window.MMEditor = (function () {
     function buildExport() {
         var merged = {
             version: 1,
+            // Always exported: once city_tags.json carries a bio it is the
+            // authoritative site bio (the generator prefers it over the
+            // Instagram profile bio, even when empty)
+            bio: effectiveBio(),
             posts: {},
             stories: {},
             cities: {},
@@ -263,6 +290,8 @@ window.MMEditor = (function () {
         setFav: setFav,
         effectiveCityText: effectiveCityText,
         setCityText: setCityText,
+        effectiveBio: effectiveBio,
+        setBio: setBio,
         cityTextPending: cityTextPending,
         cityNames: cityNames,
         taggedCount: taggedCount,

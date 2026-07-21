@@ -6,7 +6,6 @@
   --instagram-link: #0095f6;
   /* Secondary text — 5.18:1 on #fff, 4.96:1 on #fafafa (both pass WCAG AA) */
   --text-secondary: #6d6d6d;
-  --header-height: 60px;
 }
 
 * {
@@ -98,46 +97,65 @@ body {
   line-height: 1.5;
 }
 
+/* Masthead and footer are white full-bleed bands; their inner content
+   shares <main>'s max-width and padding so the title, the page content and
+   the footer text all sit on the same left edge. The header scrolls with
+   the page (it holds no navigation — the nav rows live in <main>). */
 header {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: var(--header-height);
   background-color: white;
   border-bottom: 1px solid var(--instagram-border);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 20px;
-  z-index: 100;
+  padding: 18px 0;
 }
 
-.header-content {
+.header-content,
+.footer-content,
+main {
   max-width: 975px;
   width: 100%;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 0 20px;
+}
+
+main {
+  margin-top: 30px;
+  margin-bottom: 30px;
 }
 
 .logo {
+  display: block;
   font-size: 24px;
   font-weight: bold;
   color: var(--instagram-text);
   text-decoration: none;
 }
 
-.date-range-header {
+.site-bio {
+  margin-top: 6px;
+  max-width: 600px;
+  line-height: 1.4;
   color: var(--text-secondary);
-  font-size: 14px;
-  margin-left: 15px;
 }
 
-main {
-  max-width: 975px;
-  margin: calc(var(--header-height) + 30px) auto 30px;
-  padding: 0 20px;
+footer {
+  background-color: white;
+  border-top: 1px solid var(--instagram-border);
+  padding: 18px 0;
+  margin-top: 40px;
+}
+
+.footer-content {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.footer-content a {
+  color: var(--instagram-link);
+  text-decoration: none;
+}
+
+.footer-content a:hover {
+  text-decoration: underline;
 }
 
 .profile-info {
@@ -147,18 +165,6 @@ main {
 }
 
 
-
-.profile-details h1 {
-  font-size: 28px;
-  font-weight: 300;
-  margin-bottom: 15px;
-}
-
-.profile-details .bio {
-  margin: 0 0 10px 0;
-  max-width: 600px;
-  line-height: 1.4;
-}
 
 .profile-details .website {
   margin: 0 0 15px 0;
@@ -182,6 +188,59 @@ main {
 
 .stat {
   margin-right: 40px;
+}
+
+/* Three-row navigation (see _nav.html): overview row, then one row per
+   imported service, each with a data-driven label. One shared grid keeps
+   the links vertically aligned across rows (days/posts/photos in one
+   column, cities/stories/tags in the next); each .nav-row contributes its
+   cells via display:contents, and the labels pin to column 1, which also
+   starts each new grid row. */
+.nav-rows {
+  display: grid;
+  grid-template-columns: repeat(4, max-content);
+  column-gap: 40px;
+  row-gap: 8px;
+  justify-items: start;
+  align-items: baseline;
+}
+
+.nav-rows .nav-row {
+  display: contents;
+}
+
+.nav-rows .stat {
+  margin-right: 0; /* the grid's column-gap spaces the columns */
+}
+
+.nav-service-label {
+  grid-column: 1;
+  color: var(--text-secondary);
+}
+
+/* Narrow screens: four max-content columns overflow, so fall back to
+   wrapped rows with the label on its own line */
+@media (max-width: 600px) {
+  .nav-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .nav-rows .nav-row {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+  }
+
+  .nav-rows .stat {
+    margin-right: 24px;
+  }
+
+  .nav-service-label {
+    width: 100%;
+    margin-bottom: 2px;
+  }
 }
 
 .stat-count {
@@ -343,6 +402,28 @@ main {
   overflow: hidden;
   margin: 12px 0;
   z-index: 0; /* keep Leaflet panes under the modal controls */
+}
+
+/* Editor: profile bio box — in the page flow, not a floating .editor-panel */
+.editor-bio {
+  max-width: 600px;
+  margin: 0 0 20px;
+}
+
+.editor-bio label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.editor-bio textarea {
+  display: block;
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 12px;
+  font: inherit;
+  border: 1px solid var(--instagram-border, #dbdbdb);
+  border-radius: 8px;
 }
 
 /* Tags page: filter box above the (reused) city-chip index */
@@ -780,17 +861,6 @@ main {
     justify-content: center;
   }
 
-  .header-content {
-    flex-direction: column;
-    align-items: center;
-    padding: 5px 0;
-  }
-
-  .date-range-header {
-    margin-left: 0;
-    margin-top: 2px;
-    font-size: 12px;
-  }
 
   .sort-options {
     padding: 5px;
