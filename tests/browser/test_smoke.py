@@ -10,7 +10,7 @@ pytestmark = pytest.mark.browser
 # --------------------------------------------------------------------------
 
 def test_index_renders_tiles_and_opens_the_modal(page, base_url):
-    page.goto(f"{base_url}/index.html")
+    page.goto(f"{base_url}/posts.html")
     tiles = page.locator(".grid-item")
     assert tiles.count() > 0, "no post tiles rendered"
 
@@ -22,7 +22,7 @@ def test_index_renders_tiles_and_opens_the_modal(page, base_url):
 
 
 def test_index_sorting_reorders_tiles(page, base_url):
-    page.goto(f"{base_url}/index.html")
+    page.goto(f"{base_url}/posts.html")
     first_before = page.locator(".grid-item").first.get_attribute("data-timestamp")
     page.locator('.sort-link[data-sort="oldest"]').click()
     first_after = page.locator(".grid-item").first.get_attribute("data-timestamp")
@@ -34,7 +34,7 @@ def test_index_sorting_reorders_tiles(page, base_url):
 
 def test_post_deep_link_opens_the_modal(page, base_url, site):
     ts = site["ig_ts"]["single"]
-    page.goto(f"{base_url}/index.html?post={ts}")
+    page.goto(f"{base_url}/posts.html?post={ts}")
     page.locator("#postModal").wait_for(state="visible", timeout=5000)
 
 
@@ -43,7 +43,7 @@ def test_post_deep_link_opens_the_modal(page, base_url, site):
 # --------------------------------------------------------------------------
 
 def test_timeline_paints_one_month_then_builds_others(page, base_url):
-    page.goto(f"{base_url}/timeline.html")
+    page.goto(f"{base_url}/index.html")
     assert page.locator(".timeline-month:not([hidden])").count() == 1
 
     options = page.locator("#monthSelect option")
@@ -61,7 +61,7 @@ def test_timeline_paints_one_month_then_builds_others(page, base_url):
 
 
 def test_switching_months_does_not_duplicate_panels(page, base_url):
-    page.goto(f"{base_url}/timeline.html")
+    page.goto(f"{base_url}/index.html")
     options = page.locator("#monthSelect option")
     first = options.first.get_attribute("value")
     last = options.last.get_attribute("value")
@@ -75,7 +75,7 @@ def test_switching_months_does_not_duplicate_panels(page, base_url):
 
 
 def test_unknown_deep_link_falls_back_without_a_ghost_month(page, base_url):
-    page.goto(f"{base_url}/timeline.html?post=999999999")
+    page.goto(f"{base_url}/index.html?post=999999999")
     page.wait_for_timeout(200)
     assert page.locator(".timeline-month:not([hidden])").count() == 1
     assert page.locator("#postModal:visible").count() == 0
@@ -84,12 +84,12 @@ def test_unknown_deep_link_falls_back_without_a_ghost_month(page, base_url):
 def test_flickr_deep_link_on_the_timeline(page, base_url, site):
     """?photo= resolves its month through mmMonthKeyOfTarget, not timestamp math."""
     pid = site["ids"]["plain"]
-    page.goto(f"{base_url}/timeline.html?photo={pid}")
+    page.goto(f"{base_url}/index.html?photo={pid}")
     page.locator("#flickrModal").wait_for(state="visible", timeout=5000)
 
 
 def test_on_this_day_shows_planted_memories(page, base_url):
-    page.goto(f"{base_url}/timeline.html")
+    page.goto(f"{base_url}/index.html")
     toggle = page.locator("#viewOnThisDay")
     assert "(" in toggle.inner_text(), f"no OTD count in {toggle.inner_text()!r}"
 
@@ -207,7 +207,7 @@ def test_pages_work_from_the_filesystem(page, site):
     The site must open from a bare filesystem, not just a server. This is the
     reason for classic scripts and no fetch anywhere.
     """
-    for name in ("index.html", "timeline.html", "flickr.html", "tags.html"):
+    for name in ("index.html", "posts.html", "flickr.html", "tags.html"):
         page.goto((site["out"] / name).as_uri())
         page.wait_for_timeout(150)
     # tiles still render with no origin
@@ -219,7 +219,7 @@ def test_on_this_day_includes_flickr_memories(page, base_url):
     On This Day spans every source. Flickr entries are id-keyed with the date
     inside the entry, so they exercise the provider's timeOf hook.
     """
-    page.goto(f"{base_url}/timeline.html")
+    page.goto(f"{base_url}/index.html")
     page.locator("#viewOnThisDay").click()
     otd = page.locator("#onThisDay")
     otd.wait_for(state="visible", timeout=5000)
@@ -240,7 +240,7 @@ def test_on_this_day_story_tiles_keep_their_shape(page, base_url):
     Story tiles are 9:16 and must not pick up the square .otd-tile styling
     that posts and Flickr items use.
     """
-    page.goto(f"{base_url}/timeline.html")
+    page.goto(f"{base_url}/index.html")
     page.locator("#viewOnThisDay").click()
     page.locator("#onThisDay").wait_for(state="visible", timeout=5000)
     stories = page.locator("#onThisDay .timeline-story-tile")
@@ -261,7 +261,7 @@ def test_flickr_arrows_work_from_on_this_day(page, base_url):
     an On This Day item is from a previous year by definition — so it was
     never in that panel and the arrows silently did nothing.
     """
-    page.goto(f"{base_url}/timeline.html")
+    page.goto(f"{base_url}/index.html")
     page.locator("#viewOnThisDay").click()
     otd = page.locator("#onThisDay")
     otd.wait_for(state="visible", timeout=5000)
@@ -285,7 +285,7 @@ def test_flickr_arrows_cycle_within_the_memories(page, base_url):
     Prev/next should walk the memories on screen, not the whole archive —
     matching how the tag and album pages scope navigation.
     """
-    page.goto(f"{base_url}/timeline.html")
+    page.goto(f"{base_url}/index.html")
     page.locator("#viewOnThisDay").click()
     page.locator("#onThisDay").wait_for(state="visible", timeout=5000)
     ids = page.locator("#onThisDay .otd-tile[data-id]").evaluate_all(
@@ -333,7 +333,7 @@ def test_closing_a_viewer_does_not_scroll_the_page(page, base_url, browser_name)
     Chromium focuses the link itself and never shows it, so this test is
     close to meaningless unless it also runs with --browser webkit.
     """
-    page.goto(f"{base_url}/timeline.html")
+    page.goto(f"{base_url}/index.html")
     page.locator("#viewOnThisDay").click()
     page.locator("#onThisDay").wait_for(state="visible", timeout=5000)
     page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
@@ -499,7 +499,7 @@ def test_map_cluster_dblclick_zooms_in(page, base_url):
 # responsive layout
 # --------------------------------------------------------------------------
 
-@pytest.mark.parametrize("path", ["index.html", "timeline.html", "flickr.html",
+@pytest.mark.parametrize("path", ["index.html", "posts.html", "flickr.html",
                                   "tags.html", "map.html", "cities.html"])
 def test_no_horizontal_scroll_at_any_width(page, base_url, site, path):
     """

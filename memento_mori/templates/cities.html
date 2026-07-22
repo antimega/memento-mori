@@ -58,7 +58,7 @@
           <div class="timeline-row-label">{{ city.post_count }} post{{ 's' if city.post_count != 1 }}</div>
           <div class="timeline-posts">
             {% for post in city.posts %}
-            <a class="grid-item timeline-tile" data-index="{{ post.index }}" data-timestamp="{{ post.timestamp }}" href="index.html?post={{ post.timestamp }}">
+            <a class="grid-item timeline-tile" data-index="{{ post.index }}" data-timestamp="{{ post.timestamp }}" href="posts.html?post={{ post.timestamp }}">
               <div class="tile-media">
                 <img src="{{ post.display_media }}" alt="Instagram post"{{ post.lazy_load }}>
                 {% if post.is_fav %}
@@ -79,7 +79,7 @@
           {% if city.flickr %}
           <div class="timeline-row-label">{{ city.flickr_count }} Flickr photo{{ 's' if city.flickr_count != 1 }}</div>
           <div class="timeline-posts">
-            {# Tile markup parity: keep in step with flickr.html, timeline.html
+            {# Tile markup parity: keep in step with flickr.html, index.html
                and the mmFlickrGridTile / flickrTimelineTile builders. #}
             {% for item in city.flickr %}
             <a class="grid-item flickr-tile" data-id="{{ item.id }}" href="{{ item.photopage }}">

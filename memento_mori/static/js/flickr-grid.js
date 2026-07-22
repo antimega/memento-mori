@@ -2,7 +2,7 @@
 // renders client-side: the server ships only the first chunk of tiles
 // (~30k at once would be a ~7 MB page), and this appends the rest in
 // batches from window.flickrData as the user scrolls. Also provides the
-// Newest/Oldest/Random sorting, mirroring index.html's sort row.
+// Newest/Oldest/Random sorting, mirroring posts.html's sort row.
 //
 // Exposes window.mmFlickrOrder — the full id list in the current sort
 // order — which flickr-viewer.js uses for prev/next (so navigation covers
@@ -104,7 +104,7 @@ document.addEventListener('DOMContentLoaded', function () {
     window.addEventListener('scroll', maybeAppend, { passive: true });
     window.addEventListener('resize', maybeAppend, { passive: true });
 
-    // Sorting — same controls and aria-current handling as index.html
+    // Sorting — same controls and aria-current handling as posts.html
     function resort(kind) {
         if (kind === 'newest') {
             order = newestFirst.slice();

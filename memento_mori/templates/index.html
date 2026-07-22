@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Memento Mori - {{ username }}'s Instagram Archive</title>
+    <title>Memento Mori - {{ username }}'s Timeline</title>
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
     {% if gtag_id %}
@@ -17,10 +17,22 @@
       gtag('config', '{{ gtag_id }}');
     </script>
     {% endif %}
-    <!-- Post data for the modal (shared file, loaded once and cached).
-         Deferred so the grid parses and paints without waiting on the data. -->
+    <!-- Post and story data for the in-page viewers. All deferred so the
+         body parses and paints without waiting on ~3MB of data JS; defer
+         preserves execution order and runs before DOMContentLoaded. -->
     <script src="js/posts-data.js" defer></script>
+    <script src="js/stories-data.js" defer></script>
+    {% if has_flickr %}
+    <script src="js/flickr-data.js" defer></script>
+    {% endif %}
+    <script src="js/timeline-months.js" defer></script>
     <script src="js/modal.js" defer></script>
+    <script src="js/stories.js" defer></script>
+    {% if has_flickr %}
+    <script src="js/flickr-viewer.js" defer></script>
+    {% endif %}
+    <script src="js/month-nav.js" defer></script>
+    <script src="js/on-this-day.js" defer></script>
     <!-- Leaflet powers the per-post location map in the modal; used on click, so deferred -->
     <script src="vendor/leaflet/leaflet.js" defer></script>
   </head>
@@ -28,22 +40,99 @@
     <a class="skip-link" href="#main">Skip to content</a>
     {% include "_header.html" %}
     <main id="main" tabindex="-1">
-      {% set active_page = 'posts' %}
+      {% set active_page = 'days' %}
       {% include "_nav.html" %}
-      <div class="sort-options">
-        <div class="sort-row">
-          <button type="button" class="sort-link active" data-sort="newest" aria-current="true">Newest</button>
-          <button type="button" class="sort-link" data-sort="oldest">Oldest</button>
-          <button type="button" class="sort-link" data-sort="random">Random</button>
+
+      <div class="timeline-views" role="group" aria-label="Timeline view">
+        <button type="button" id="viewTimeline" class="view-toggle active" aria-pressed="true">Timeline</button>
+        <button type="button" id="viewOnThisDay" class="view-toggle" aria-pressed="false">On this day</button>
+      </div>
+
+      <div class="month-nav" id="monthNav">
+        <button type="button" id="olderMonth" title="Older month" aria-label="Older month">←</button>
+        <select id="monthSelect" aria-label="Select month">
+          {% for month in months %}
+          <option value="{{ month.key }}">{{ month.label }} ({{ month.item_count }})</option>
+          {% endfor %}
+        </select>
+        <button type="button" id="newerMonth" title="Newer month" aria-label="Newer month">→</button>
+      </div>
+
+      <div class="timeline-container">
+        {# Only the newest month is server-rendered (it paints during parse,
+           before any JS); every other month is built on demand client-side by
+           timeline-months.js. The #monthSelect loop above still lists all
+           months. #}
+        {% for month in months[:1] %}
+        <div class="timeline-month" data-month="{{ month.key }}">
+        {% for day in month.days %}
+        <section class="timeline-day">
+          <h2 class="timeline-day-header">{{ day.heading }}</h2>
+          {% if day.posts %}
+          <div class="timeline-row-label">{{ day.post_count }} post{{ 's' if day.post_count != 1 }}</div>
+          <div class="timeline-posts">
+            {% for post in day.posts %}
+            <a class="grid-item timeline-tile" data-index="{{ post.index }}" data-timestamp="{{ post.timestamp }}" href="posts.html?post={{ post.timestamp }}">
+              <div class="tile-media">
+                <img src="{{ post.display_media }}" alt="Instagram post"{{ post.lazy_load }}>
+                {% if post.is_video %}
+                <div class="video-indicator">▶ Video</div>
+                {% endif %}
+                {% if post.media_count > 1 %}
+                <div class="multi-indicator">⊞ {{ post.media_count }}</div>
+                {% endif %}
+              </div>
+              <div class="tile-place">{{ post.place }}</div>
+            </a>
+            {% endfor %}
+          </div>
+          {% endif %}
+          {% if day.stories %}
+          <div class="timeline-row-label">{{ day.story_count }} stor{{ 'ies' if day.story_count != 1 else 'y' }}</div>
+          <div class="timeline-stories">
+            {% for story in day.stories %}
+            <a class="story-item timeline-story-tile" data-index="{{ story.index }}" data-timestamp="{{ story.timestamp }}" href="stories.html?story={{ story.timestamp }}">
+              <img src="{{ story.media }}" alt="Instagram story"{{ story.lazy_load }} onerror="this.onerror=null; this.src='{{ story.original_media }}';">
+              {% if story.is_video %}
+              <div class="video-indicator">▶</div>
+              {% endif %}
+            </a>
+            {% endfor %}
+          </div>
+          {% endif %}
+          {% if day.flickr %}
+          <div class="timeline-row-label">Flickr photos and videos ({{ day.flickr_count }})</div>
+          <div class="timeline-posts">
+            {% for item in day.flickr %}
+            <a class="grid-item timeline-tile flickr-tile" data-id="{{ item.id }}" href="{{ item.photopage }}">
+              <div class="tile-media">
+                <img src="{{ item.display_media }}" alt="Flickr photo"{{ item.lazy_load }}>
+                {% if item.is_video %}
+                <div class="video-indicator">▶ Video</div>
+                {% endif %}
+              </div>
+              <div class="tile-place">{{ item.title }}</div>
+            </a>
+            {% endfor %}
+          </div>
+          {% endif %}
+        </section>
+        {% endfor %}
         </div>
+        {% endfor %}
       </div>
-      <div class="posts-grid" id="postsGrid">
-        {{ grid_html|safe }}
-      </div>
+
+      <div id="onThisDay" class="on-this-day" hidden></div>
     </main>
 
     {% include "_post_modal.html" %}
-    
+
+    {% include "_story_viewer.html" %}
+
+    {% if has_flickr %}
+    {% include "_flickr_viewer.html" %}
+    {% endif %}
+
     {% include "_footer.html" %}
   </body>
 </html>

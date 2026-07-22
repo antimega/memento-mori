@@ -2,20 +2,20 @@
 //
 // The timeline page server-renders only the newest month; every other month
 // is built on demand in the browser from window.postData / window.storiesData
-// (the same data the in-page viewers already load). This keeps timeline.html
+// (the same data the in-page viewers already load). This keeps index.html
 // small (one month of markup instead of ~150) while months materialise
 // instantly on navigation.
 //
 // Window contract exposed for the other timeline scripts:
 //   window.monthKeyOf(ts)        -> "YYYY-MM" (UTC) for a timestamp
 //   window.mmTiles.post/.story/.flickr -> a single tile element (markup parity with
-//                                   the Jinja tiles in templates/timeline.html)
+//                                   the Jinja tiles in templates/index.html)
 //   window.mmBuildMonth(key)     -> the [data-month] panel (existing or built),
 //                                   or null for an unknown key (no ghost month)
 //   window.mmEnsureMonthFor(ts)  -> build (hidden) the month containing ts
 //
 // IMPORTANT: the tile markup here must stay byte-for-byte in step with the
-// post/story tiles in templates/timeline.html (classes, data-*, href,
+// post/story tiles in templates/index.html (classes, data-*, href,
 // indicators, .tile-place). If you change one, change the other.
 (function () {
     var MONTH_NAMES = [
@@ -62,13 +62,13 @@
     }
 
     var mmTiles = {
-        // Parity target: the post tile in templates/timeline.html
+        // Parity target: the post tile in templates/index.html
         post: function (ts, entry) {
             var a = document.createElement('a');
             a.className = 'grid-item timeline-tile';
             a.setAttribute('data-index', entry.i);
             a.setAttribute('data-timestamp', ts);
-            a.setAttribute('href', 'index.html?post=' + ts);
+            a.setAttribute('href', 'posts.html?post=' + ts);
 
             var media = document.createElement('div');
             media.className = 'tile-media';
@@ -99,7 +99,7 @@
             a.appendChild(place);
             return a;
         },
-        // Parity target: the story tile in templates/timeline.html. The one
+        // Parity target: the story tile in templates/index.html. The one
         // intentional difference from the server markup is that onerror is set
         // as a property (not an attribute) to avoid quoting the media path.
         story: function (ts, entry) {
@@ -159,7 +159,7 @@
         }
     }
 
-    // Parity target: the flickr tile in templates/timeline.html
+    // Parity target: the flickr tile in templates/index.html
     function flickrTimelineTile(id, entry) {
         var alias = (window.flickrMeta && window.flickrMeta.path_alias) || '';
         var a = document.createElement('a');
@@ -276,7 +276,7 @@
             }
             if (day.flickr.length) {
                 // Third section, after posts and stories (matches the
-                // server-rendered newest month in templates/timeline.html)
+                // server-rendered newest month in templates/index.html)
                 var fl = day.flickr.slice().sort(function (a, b) {
                     return (window.flickrData[b].t - window.flickrData[a].t)
                         || (parseInt(b, 10) - parseInt(a, 10));

@@ -249,7 +249,7 @@ def test_timeline_wires_up_flickr(built):
     timeline should carry the Flickr *machinery* and list the Flickr months,
     with the tiles themselves built client-side on demand.
     """
-    html = (built["out"] / "timeline.html").read_text(encoding="utf-8")
+    html = (built["out"] / "index.html").read_text(encoding="utf-8")
     assert "flickr-data.js" in html, "timeline does not load the Flickr data"
     assert "flickr-viewer.js" in html, "timeline does not load the Flickr viewer"
     assert 'id="flickrModal"' in html, "Flickr viewer partial not included"

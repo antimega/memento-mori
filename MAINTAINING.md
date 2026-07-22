@@ -20,9 +20,10 @@ thumbnails. Design constraints that shape everything:
   import in the published pages — data is loaded via classic `<script>` files
   that assign `window.postData` / `window.storiesData` / `window.flickrData`.
 - **Any subset of sources.** A site can be built from Instagram, from Flickr,
-  or from both; nav rows for absent sources hide themselves, and `index.html`
-  becomes a redirect stub when Instagram is not present (see §3z). Sources are
-  a registry, not a pair of special cases.
+  or from both; nav rows for absent sources hide themselves. `index.html` is the
+  timeline (the home page), which spans every source, so it always resolves —
+  the posts grid lives at `posts.html`. Sources are a registry, not a pair of
+  special cases.
 - **Vendored libraries** (Leaflet 1.9.4, Leaflet.markercluster 1.5.3,
   marked 12.0.2) under `static/vendor/` — no CDN. `_copy_static_assets`
   copies `vendor/**` recursively, so a new library ships by existing.
@@ -270,7 +271,7 @@ editor's overlay/export like everything else.
 All pages: server-rendered semantic HTML, deferred data scripts, viewers opened
 by **index**, deep links via `?post=`/`?story=`, UTC date basis throughout.
 
-- **`index.html`** — posts grid. Server-renders **all** post tiles (via
+- **`posts.html`** — posts grid. Server-renders **all** post tiles (via
   `grid.html`). Loads `posts-data.js` + `modal.js` + vendored Leaflet (all
   deferred; Leaflet powers the modal's per-post location map). Sort buttons —
   **Newest / Oldest / Random only** — reorder tiles in place. (The old Most
@@ -282,8 +283,9 @@ by **index**, deep links via `?post=`/`?story=`, UTC date basis throughout.
   Deep link `?story=TS`. (Note: `templates/stories.html` exists but is **not**
   used by the generator — the page comes from `stories_page.html`.)
 
-- **`timeline.html`** — the one structurally different page. **Only the newest
-  month is server-rendered**; every other month's DOM is built **on demand,
+- **`index.html`** (the home page, from template `index.html`) — the timeline,
+  and the one structurally different page. **Only the newest month is
+  server-rendered**; every other month's DOM is built **on demand,
   client-side**, from the already-loaded data. Each day shows three sections:
   posts, stories, then **"Flickr photos and videos (N)"** (flickr tiles carry
   `grid-item timeline-tile flickr-tile`; modal.js's delegation explicitly
@@ -428,7 +430,7 @@ Result: ~60 KB HTML, ~580 DOM nodes, DOMContentLoaded well under 100 ms.
 **Contracts exposed on `window`:**
 - `monthKeyOf(ts)` → `"YYYY-MM"` (UTC).
 - `mmTiles.post(ts, entry)` / `mmTiles.story(ts, entry)` → one tile element with
-  **exact markup parity** to the Jinja tiles in `templates/timeline.html`.
+  **exact markup parity** to the Jinja tiles in `templates/index.html`.
 - `mmBuildMonth(key)` → the `[data-month]` panel (existing or freshly built),
   or **`null` for an unknown key** (no ghost months). Inserted in descending
   month order so document order stays chronological.
@@ -548,10 +550,11 @@ visual/CSS regressions, and the network paths (API sweep, CDN downloader
 pacing) are all still manual.
 
 **Artifacts.** Reference sizes for the current archive (6,283 posts / 30,335
-flickr items): `timeline.html` ~69 KB with exactly one `.timeline-month` div
-and a full `<select>`; `flickr.html` ~24 KB; `tags.html` / `albums.html`
-~4.3 KB each (pure shells — everything is client-built); `index.html` ~1.8 MB
-and `stories.html` ~2.6 MB (both server-render every tile, by design).
+flickr items): `index.html` (the timeline) ~69 KB with exactly one
+`.timeline-month` div and a full `<select>`; `flickr.html` ~24 KB; `tags.html`
+/ `albums.html` ~4.3 KB each (pure shells — everything is client-built);
+`posts.html` ~1.8 MB and `stories.html` ~2.6 MB (both server-render every
+tile, by design).
 `data.json` contains no `th`/`dm`/`vp`; a `posts-data.js` entry has `th` and
 `thumbnails/<th>.webp` exists; no `<style>` blocks or `profile-picture` markup
 in any output HTML.
@@ -761,7 +764,7 @@ verify each. Keep the viewport fixed between captures.
   so without setting the order the arrows silently do nothing. `showView`
   clears it again when returning to the timeline.
 - **The flickr tile markup lives in FOUR places** — `templates/flickr.html`
-  (grid) + `buildTile` in `flickr-grid.js`, and `templates/timeline.html`
+  (grid) + `buildTile` in `flickr-grid.js`, and `templates/index.html`
   (timeline row) + `flickrTimelineTile` in `timeline-months.js` (the
   timeline variant adds the `timeline-tile` class). Change all in step.
 - **`mmMonthKeyOfTarget`** is how month-nav.js resolves `?photo=` deep-link
@@ -783,7 +786,7 @@ verify each. Keep the viewport fixed between captures.
 memento_mori/
   cli.py extractor.py loader.py media.py merger.py file_mapper.py generator.py
   flickr.py   (Flickr importer: loader, dedup, API client, downloader/processor)
-  templates/  index.html grid.html stories_page.html timeline.html cities.html
+  templates/  index.html posts.html grid.html stories_page.html cities.html
               flickr.html tags.html albums.html map.html
               edit.html edit-cities.html edit-flickr.html
               _header.html _nav.html _footer.html          (shared chrome)

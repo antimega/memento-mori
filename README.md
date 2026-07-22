@@ -297,7 +297,8 @@ my-theme/
                  files you actually change need to exist here; everything else
                  falls through to the built-in template. Handy names to
                  override: _header.html, _nav.html, _footer.html, and the
-                 page templates (index.html, timeline.html, …).
+                 page templates (index.html is the timeline home, posts.html
+                 the posts grid, …).
   static/        Files copied over the default CSS/JS/vendor assets after they
                  are written, so a same-named file wins. Mirror the output
                  layout: static/css/style.css replaces the stock stylesheet;
@@ -316,12 +317,12 @@ control — the generated files stay disposable, the theme holds every edit.
 
 ## Viewing your generated site
 
-Open `index.html` from the output directory (default: `./output`). The stats under the title double as navigation, grouped by source:
+Open `index.html` from the output directory (default: `./output`). The home page is the timeline (the **days** view); the stats under the title double as navigation, grouped by source:
 
-- **days** (`timeline.html`) — every post, story, and Flickr item grouped by date, newest first, one month at a time, with an **On This Day** toggle for memories from previous years. Each day shows posts, then stories, then a "Flickr photos and videos" section.
+- **days** (`index.html`) — the home page: every post, story, and Flickr item grouped by date, newest first, one month at a time, with an **On This Day** toggle for memories from previous years. Each day shows posts, then stories, then a "Flickr photos and videos" section.
 - **cities** (`cities.html`) — appears once you've tagged content with cities (see below); one city at a time with an interactive map and a clickable index.
 - **pins** (`map.html`) — every geotagged item across all your sources on one clustered map. Click a cluster to list its photos and posts underneath (they open in the usual viewers); double-click to zoom in. Appears whenever anything is geotagged.
-- **posts** (`index.html`) — the main Instagram grid, sortable by newest, oldest, or random. Click any post to open it in a modal, which shows a small map of its location when coordinates are available.
+- **posts** (`posts.html`) — the main Instagram grid, sortable by newest, oldest, or random. Click any post to open it in a modal, which shows a small map of its location when coordinates are available.
 - **stories** (`stories.html`) — your Instagram Stories in a 9:16 viewer; advance them yourself with the arrows or by clicking.
 - **photos** (`flickr.html`) — your public Flickr photos and videos in one grid (loading progressively as you scroll), sortable newest/oldest/random, with a viewer showing the title, description, tags, albums, and location.
 - **tags** (`tags.html`) — a tag navigator for the Flickr archive: every tag as a clickable chip (most-used first, with a filter box), showing the selected tag's items. Selections are linkable (`tags.html#tag=venice`).

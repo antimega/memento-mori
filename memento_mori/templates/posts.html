@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memento Mori - {{ username }}'s Instagram Archive</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+    {% if gtag_id %}
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id={{ gtag_id }}"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+
+      gtag('config', '{{ gtag_id }}');
+    </script>
+    {% endif %}
+    <!-- Post data for the modal (shared file, loaded once and cached).
+         Deferred so the grid parses and paints without waiting on the data. -->
+    <script src="js/posts-data.js" defer></script>
+    <script src="js/modal.js" defer></script>
+    <!-- Leaflet powers the per-post location map in the modal; used on click, so deferred -->
+    <script src="vendor/leaflet/leaflet.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    {% include "_header.html" %}
+    <main id="main" tabindex="-1">
+      {% set active_page = 'posts' %}
+      {% include "_nav.html" %}
+      <div class="sort-options">
+        <div class="sort-row">
+          <button type="button" class="sort-link active" data-sort="newest" aria-current="true">Newest</button>
+          <button type="button" class="sort-link" data-sort="oldest">Oldest</button>
+          <button type="button" class="sort-link" data-sort="random">Random</button>
+        </div>
+      </div>
+      <div class="posts-grid" id="postsGrid">
+        {{ grid_html|safe }}
+      </div>
+    </main>
+
+    {% include "_post_modal.html" %}
+    
+    {% include "_footer.html" %}
+  </body>
+</html>

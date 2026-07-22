@@ -57,17 +57,19 @@ def built(tmp_path_factory):
 # --------------------------------------------------------------------------
 
 def test_flickr_pages_exist(built):
-    for page in ("flickr.html", "tags.html", "albums.html", "timeline.html",
+    # The timeline is the home page at index.html (no separate timeline.html).
+    for page in ("flickr.html", "tags.html", "albums.html", "index.html",
                  "js/flickr-data.js"):
         assert (built["out"] / page).exists(), f"missing {page}"
 
 
 def test_timeline_is_generated_and_populated(built):
     """
-    The timeline spans all sources. Gating it on Instagram (as the old code
-    did) would ship a nav link to a page that was never written.
+    The timeline spans all sources and is the home page (index.html). Gating
+    it on Instagram (as the old code did) would ship a nav link to a page that
+    was never written.
     """
-    html = (built["out"] / "timeline.html").read_text(encoding="utf-8")
+    html = (built["out"] / "index.html").read_text(encoding="utf-8")
     assert html.count('class="timeline-month"') == 1
     assert "flickr-data.js" in html
     assert "flickr-tile" in html, "newest month has no Flickr tiles"
@@ -78,17 +80,15 @@ def test_instagram_pages_are_absent(built):
         assert not (built["out"] / page).exists(), f"{page} built without Instagram"
 
 
-def test_index_redirects_to_the_flickr_grid(built):
+def test_index_is_the_timeline_not_a_redirect(built):
     """
-    index.html must still exist and lead somewhere — it is the URL people
-    have. It becomes a redirect so every other link is identical across site
-    flavors and a later --merge can replace it with the real grid.
+    index.html is the timeline home even for a Flickr-only site — the timeline
+    spans every source, so it always resolves and no redirect stub is needed.
     """
     html = (built["out"] / "index.html").read_text(encoding="utf-8")
-    assert 'http-equiv="refresh"' in html
-    assert 'url=flickr.html' in html
-    assert 'rel="canonical" href="flickr.html"' in html
-    assert '<a href="flickr.html">' in html, "no no-JS fallback link"
+    assert 'http-equiv="refresh"' not in html, "index.html should be the timeline, not a redirect"
+    assert 'class="timeline-month"' in html, "index.html is not the timeline"
+    assert "flickr-tile" in html, "the Flickr-only home has no Flickr tiles"
 
 
 def test_editor_is_generated_for_the_bio(built):
@@ -114,7 +114,7 @@ def test_nav_has_only_the_flickr_row(built):
     html = (built["out"] / "flickr.html").read_text(encoding="utf-8")
     assert "Flickr tester" in html
     assert "Instagram" not in html, "Instagram nav row rendered with no Instagram"
-    for href in ("flickr.html", "tags.html", "albums.html", "timeline.html"):
+    for href in ("flickr.html", "tags.html", "albums.html", "index.html"):
         assert href in html, f"nav is missing {href}"
 
 
@@ -131,9 +131,9 @@ def test_nav_links_all_resolve(built):
 
 def test_empty_instagram_data_files_still_written(built):
     """
-    timeline.html loads posts-data.js/stories-data.js unguarded, so they must
-    exist and parse even with no Instagram — otherwise every script on the
-    page dies on an undefined global.
+    index.html (the timeline) loads posts-data.js/stories-data.js unguarded,
+    so they must exist and parse even with no Instagram — otherwise every
+    script on the page dies on an undefined global.
     """
     assert decode_browser_data(built["out"] / "js/posts-data.js", "postData") == {}
     assert decode_browser_data(
@@ -171,8 +171,9 @@ def test_privacy_still_enforced(built):
 
 def test_merging_instagram_later_upgrades_the_site(tmp_path):
     """
-    Flickr-only today, combined tomorrow: the redirect stub becomes the real
-    grid, identity flips to Instagram, and the Flickr section is untouched.
+    Flickr-only today, combined tomorrow: merging Instagram adds the posts
+    grid at posts.html, folds the posts into the timeline home (index.html),
+    flips identity to Instagram, and leaves the Flickr section untouched.
     """
     flickr = tmp_path / "flickr-download"
     flickr.mkdir()
@@ -182,16 +183,20 @@ def test_merging_instagram_later_upgrades_the_site(tmp_path):
     assert _cli("--no-auto-detect", "--flickr", flickr, "--output", out) == 0
 
     before_flickr = flickr_items(out)
-    assert "http-equiv=\"refresh\"" in (out / "index.html").read_text(encoding="utf-8")
+    # Flickr-only: the home is the timeline, and there is no posts grid yet.
+    assert "http-equiv=\"refresh\"" not in (out / "index.html").read_text(encoding="utf-8")
+    assert not (out / "posts.html").exists(), "posts grid exists before any Instagram import"
 
     export = tmp_path / "ig-export"
     export.mkdir()
     make_instagram_export(export)
     assert _cli("--merge", "--input", export, "--output", out) == 0
 
+    assert (out / "posts.html").exists(), "merge did not add the posts grid"
+    assert "grid-item" in (out / "posts.html").read_text(encoding="utf-8"), \
+        "posts.html is not the posts grid"
     index = (out / "index.html").read_text(encoding="utf-8")
-    assert "http-equiv=\"refresh\"" not in index, "redirect stub was not replaced"
-    assert "grid-item" in index, "index is not the posts grid after the merge"
+    assert "http-equiv=\"refresh\"" not in index, "home is not the timeline after the merge"
     assert "Instagram testuser" in index and "Flickr tester" in index
     assert flickr_items(out) == before_flickr, "merge disturbed the Flickr section"
     assert ig_posts(out), "merge added no posts"

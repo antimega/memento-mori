@@ -45,9 +45,11 @@ def built(tmp_path_factory):
 
 def test_exit_code_and_core_pages(built):
     out = built["out"]
-    for page in ("index.html", "timeline.html", "stories.html",
+    # index.html is the timeline (the home page); the posts grid is posts.html.
+    for page in ("index.html", "posts.html", "stories.html",
                  "edit.html", "edit-cities.html"):
         assert (out / page).exists(), f"missing {page}"
+    assert not (out / "timeline.html").exists(), "timeline.html should now be index.html"
 
 
 def test_flickr_and_cities_pages_absent(built):
@@ -176,7 +178,7 @@ def test_timeline_renders_only_the_newest_month(built):
     The on-demand-months design: exactly one month panel in the HTML, with
     every month still listed in the select.
     """
-    html = (built["out"] / "timeline.html").read_text(encoding="utf-8")
+    html = (built["out"] / "index.html").read_text(encoding="utf-8")
     assert html.count('class="timeline-month"') == 1
     assert '<select' in html and 'id="monthSelect"' in html
 
@@ -186,7 +188,7 @@ def test_no_style_blocks_or_profile_picture(built):
     Two invariants from earlier cleanups: all CSS lives in style.css, and the
     profile picture is gone from the markup entirely.
     """
-    for page in ("index.html", "timeline.html", "stories.html"):
+    for page in ("index.html", "posts.html", "stories.html"):
         html = (built["out"] / page).read_text(encoding="utf-8")
         assert "<style" not in html, f"{page} carries an inline <style> block"
         assert "profile-picture" not in html, f"{page} still renders a profile picture"

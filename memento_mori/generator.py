@@ -219,23 +219,20 @@ class InstagramSiteGenerator:
             # Write the shared post/story data scripts the pages load
             self._write_browser_data()
 
-            # index.html is the Instagram grid when Instagram is present.
-            # Without it, the URL still has to exist and lead somewhere, so
-            # it becomes a redirect to the highest-priority source's home
-            # page — keeping every other page's links identical across site
-            # flavors, and surviving a later --merge that fills it in.
+            # The Instagram posts grid lives at posts.html, when there is
+            # Instagram content to fill it.
             if self.posts or self.stories:
                 self._generate_html()
-            elif self._has_content():
-                self._write_index_redirect()
 
             # Generate stories HTML if we have stories data
             if self.stories:
                 self._generate_stories_html()
 
-            # The timeline spans every source, so it is gated on content from
-            # ANY of them — not on Instagram, which is what made a
-            # Flickr-only site ship a dead "days" nav link.
+            # index.html is the timeline — the site's home page. It spans every
+            # source, so it is gated on content from ANY of them (not on
+            # Instagram, which once left a Flickr-only site with a dead "days"
+            # link), and it exists for every non-empty site — so index.html
+            # always resolves without needing a redirect stub.
             if self._has_content():
                 self._generate_timeline_html()
 
@@ -272,40 +269,6 @@ class InstagramSiteGenerator:
     def _has_content(self):
         """True when any source actually imported something."""
         return bool(self.posts or self.stories or self.flickr_items)
-
-    def _home_page(self):
-        """
-        The page a visitor should land on, given which sources exist.
-
-        Instagram keeps index.html so published URLs never move; otherwise
-        the highest-priority source with content supplies the landing page.
-        """
-        if self.posts or self.stories:
-            return "index.html"
-        if self.flickr_items:
-            return "flickr.html"
-        return "timeline.html"
-
-    def _write_index_redirect(self):
-        """
-        Write index.html as a redirect to the real landing page.
-
-        Hand-built rather than templated: it must stay tiny and dependency
-        free, and it is replaced wholesale by the real grid the moment an
-        Instagram archive is merged in.
-        """
-        target = self._home_page()
-        html = (
-            '<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="UTF-8">\n'
-            f'<meta http-equiv="refresh" content="0; url={target}">\n'
-            f'<link rel="canonical" href="{target}">\n'
-            "<title>Memento Mori</title>\n</head>\n<body>\n"
-            f'<p><a href="{target}">Continue to the archive</a></p>\n'
-            "</body>\n</html>\n"
-        )
-        with open(self.output_dir / "index.html", "w", encoding="utf-8") as f:
-            f.write(html)
-        print(f"Generated index redirect to {target}")
 
     def _write_data_json(self):
         """
@@ -460,19 +423,19 @@ class InstagramSiteGenerator:
             print(f"Overlaid theme static: {item.name}")
 
     def _generate_html(self):
-        """Generate index.html (the posts grid)."""
+        """Generate posts.html (the Instagram posts grid)."""
         # Post/story data is loaded from the shared js/posts-data.js file
         # (written by _write_browser_data), not inlined.
-        template = self.jinja_env.get_template("index.html")
+        template = self.jinja_env.get_template("posts.html")
         html_content = template.render(
             grid_html=self._render_grid(),
             **self._page_context(),
         )
 
-        with open(self.output_dir / "index.html", "w", encoding="utf-8") as f:
+        with open(self.output_dir / "posts.html", "w", encoding="utf-8") as f:
             f.write(_minify_html(html_content))
 
-        print(f"Generated HTML file: {self.output_dir / 'index.html'}")
+        print(f"Generated HTML file: {self.output_dir / 'posts.html'}")
 
     def _render_grid(self):
         """Render the grid HTML using the grid.html template."""
@@ -769,7 +732,7 @@ class InstagramSiteGenerator:
             return None
         epochs = [int(t) for t in self.posts] + [int(t) for t in self.stories]
         profile = (self.instagram.get("profile") or {})
-        links = [("posts", "index.html", len(self.posts), "posts")]
+        links = [("posts", "posts.html", len(self.posts), "posts")]
         if self.stories:
             links.append(("stories", "stories.html", len(self.stories), "stories"))
         return {
@@ -894,21 +857,21 @@ class InstagramSiteGenerator:
 
     def _generate_timeline_html(self):
         """
-        Generate timeline.html: all posts and stories grouped by calendar
-        day, newest day first, posts and stories in separate rows per day,
-        paginated month by month.
+        Generate index.html: the timeline (the site's home page) — all posts,
+        stories and Flickr items grouped by calendar day, newest day first,
+        each kind in its own row per day, paginated month by month.
         """
         # The timeline hosts all three viewers, which read window.postData /
         # window.storiesData / window.flickrData from the shared data scripts.
         months = self._build_month_list(include_flickr=True)
 
-        template = self.jinja_env.get_template("timeline.html")
+        template = self.jinja_env.get_template("index.html")
         html_content = template.render(months=months, **self._page_context())
 
-        with open(self.output_dir / "timeline.html", "w", encoding="utf-8") as f:
+        with open(self.output_dir / "index.html", "w", encoding="utf-8") as f:
             f.write(_minify_html(html_content))
 
-        print(f"Generated timeline HTML file: {self.output_dir / 'timeline.html'}")
+        print(f"Generated timeline HTML file: {self.output_dir / 'index.html'}")
 
     # -- Flickr section ----------------------------------------------------
     # Flickr entries are keyed by photo id (NOT timestamp — 46 public items
@@ -945,13 +908,13 @@ class InstagramSiteGenerator:
 
     def _generate_flickr_html(self):
         """
-        Generate flickr.html: an index.html-style grid of every item. Only
+        Generate flickr.html: a posts.html-style grid of every item. Only
         the first chunk is server-rendered (30,335 tiles would be a ~7 MB
         page); flickr-grid.js appends the rest progressively from
         window.flickrData as the user scrolls, and handles sorting.
         """
         items = self.flickr_items
-        eager = 30       # load immediately, like index.html
+        eager = 30       # load immediately, like posts.html
         server_chunk = 60  # server-rendered so the grid paints during parse
 
         first_tiles = []

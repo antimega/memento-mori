@@ -149,7 +149,8 @@ def test_media_referenced_by_the_sidecar_resolves(data):
 
 
 def test_timeline_server_renders_exactly_one_month():
-    html = (OUTPUT / "timeline.html").read_text(encoding="utf-8")
+    # The timeline is the home page at index.html.
+    html = (OUTPUT / "index.html").read_text(encoding="utf-8")
     assert html.count('class="timeline-month"') == 1
     assert html.count("<option") > 1
 

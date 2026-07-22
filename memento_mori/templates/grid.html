@@ -1,5 +1,5 @@
 {% for post in posts %}
-<a class="grid-item" data-index="{{ post.index }}" data-timestamp="{{ post.timestamp }}" href="index.html?post={{ post.timestamp }}">
+<a class="grid-item" data-index="{{ post.index }}" data-timestamp="{{ post.timestamp }}" href="posts.html?post={{ post.timestamp }}">
   <div class="tile-media">
     <img src="{{ post.display_media }}" alt="Instagram post"{{ post.lazy_load }}>
     {% if post.is_video %}
