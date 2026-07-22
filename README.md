@@ -269,6 +269,8 @@ Options:
 --max-dimension INTEGER  Maximum image dimension in pixels [default: 1920]
 --thumbnail-size WxH     Thumbnail size [default: 292x292]
 --gtag-id ID             Google Analytics tag ID (e.g. 'G-DX1ZWTC9NZ')
+--theme PATH             Theme directory overlaid on the built-in templates and
+                         static assets (see Theming below)
 --verbose, -v            Verbose output for debugging
 ```
 
@@ -278,6 +280,39 @@ Environment variables:
 FLICKR_API_KEY           Flickr API key, used only for the one-time cached
                          metadata sweep. Never written into the generated site.
 ```
+
+## Theming
+
+`--theme <dir>` layers your own look and markup on top of the built-in output,
+so you can restyle a site without editing the generator or hand-patching its
+output after every run. It works in every mode — fresh builds, `--merge`, and
+`--regenerate` — so the usual "re-render into the same folder" workflow keeps
+applying your customisations for free.
+
+A theme directory has up to two parts, both optional:
+
+```
+my-theme/
+  templates/     Jinja templates that shadow same-named defaults. Only the
+                 files you actually change need to exist here; everything else
+                 falls through to the built-in template. Handy names to
+                 override: _header.html, _nav.html, _footer.html, and the
+                 page templates (index.html, timeline.html, …).
+  static/        Files copied over the default CSS/JS/vendor assets after they
+                 are written, so a same-named file wins. Mirror the output
+                 layout: static/css/style.css replaces the stock stylesheet;
+                 static/css/extra.css (a new name) is simply added.
+```
+
+```bash
+# Restyle via a theme, re-rendering HTML only (seconds, no media work)
+python -m memento_mori.cli --regenerate --theme ./my-theme
+```
+
+Without `--theme`, output is byte-for-byte identical to before the feature
+existed. A common pattern is to keep the generated site in its own repo, point
+`--output` at it, and keep the theme directory alongside it under version
+control — the generated files stay disposable, the theme holds every edit.
 
 ## Viewing your generated site
 

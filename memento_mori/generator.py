@@ -4,7 +4,7 @@ import json
 import shutil
 import datetime
 from pathlib import Path
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, ChoiceLoader
 from markupsafe import Markup
 import re
 import hashlib
@@ -119,13 +119,21 @@ class InstagramSiteGenerator:
     - Verifying the completeness of the output
     """
 
-    def __init__(self, data_package, output_dir, template_dir=None, static_dir=None, gtag_id=None):
+    def __init__(self, data_package, output_dir, template_dir=None, static_dir=None,
+                 gtag_id=None, theme_dir=None):
         """
         Initialize the generator with data and path options.
 
         The package is source-shaped (schema v2): everything imported lives
         under `sources`, keyed by importer name. A v1 package is migrated on
         the way in, so callers holding old data still work.
+
+        `theme_dir` is an optional overlay for site-specific customisation.
+        Templates in `<theme_dir>/templates` shadow same-named defaults (only
+        the files that differ need to exist there), and static assets in
+        `<theme_dir>/static` are copied on top of the defaults after them,
+        so a same-named theme file wins. `theme_dir=None` leaves behaviour
+        byte-identical to a build without a theme.
         """
         self.data_package = migrate_sidecar(data_package)
         self.output_dir = Path(output_dir)
@@ -172,14 +180,23 @@ class InstagramSiteGenerator:
 
         self.template_dir = Path(template_dir)
         self.static_dir = Path(static_dir)
+        self.theme_dir = Path(theme_dir) if theme_dir else None
 
         print(f"Using template directory: {self.template_dir}")
         print(f"Using static directory: {self.static_dir}")
+        if self.theme_dir:
+            print(f"Using theme directory: {self.theme_dir}")
 
-        # Set up Jinja environment
-        self.jinja_env = Environment(
-            loader=FileSystemLoader(str(self.template_dir)), autoescape=True
-        )
+        # Set up Jinja environment. With a theme, its templates shadow the
+        # defaults: ChoiceLoader tries the theme dir first, then falls through.
+        template_loaders = []
+        if self.theme_dir:
+            theme_templates = self.theme_dir / "templates"
+            if theme_templates.is_dir():
+                template_loaders.append(FileSystemLoader(str(theme_templates)))
+        template_loaders.append(FileSystemLoader(str(self.template_dir)))
+        loader = template_loaders[0] if len(template_loaders) == 1 else ChoiceLoader(template_loaders)
+        self.jinja_env = Environment(loader=loader, autoescape=True)
         # Thousand separators for the large counts in the nav
         self.jinja_env.filters["commas"] = lambda n: f"{n:,}"
 
@@ -418,6 +435,29 @@ class InstagramSiteGenerator:
         if vendor_dir.exists():
             shutil.copytree(vendor_dir, self.output_dir / "vendor", dirs_exist_ok=True)
             print("Copied vendor assets")
+
+        # Overlay theme static assets on top of the defaults. Same-named files
+        # win; the theme only needs to carry the assets that actually differ.
+        if self.theme_dir:
+            self._overlay_theme_static()
+
+    def _overlay_theme_static(self):
+        """Copy `<theme_dir>/static` over the just-copied default assets.
+
+        Mirrors the default sub-structure (css/, js/, vendor/, and any other
+        top-level dirs or files the theme adds). Every part is optional.
+        """
+        theme_static = self.theme_dir / "static"
+        if not theme_static.is_dir():
+            return
+        for item in sorted(theme_static.iterdir()):
+            dest = self.output_dir / item.name
+            if item.is_dir():
+                dest.mkdir(parents=True, exist_ok=True)
+                shutil.copytree(item, dest, dirs_exist_ok=True)
+            else:
+                shutil.copy2(item, dest)
+            print(f"Overlaid theme static: {item.name}")
 
     def _generate_html(self):
         """Generate index.html (the posts grid)."""

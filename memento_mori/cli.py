@@ -143,6 +143,15 @@ def main():
         help="Google Analytics tag ID (e.g., 'G-DX1ZWTC9NZ') to add tracking to the generated site",
     )
     parser.add_argument(
+        "--theme",
+        type=str,
+        help="Path to a theme directory whose templates/ shadow the default "
+             "templates and whose static/ is overlaid on the default CSS/JS/"
+             "vendor assets. Lets a site customise look and markup without "
+             "editing the generator. Applies to fresh, --merge and "
+             "--regenerate builds alike.",
+    )
+    parser.add_argument(
         "--merge",
         action="store_true",
         help="Merge a newer export (--input) into an existing generated site in --output",
@@ -273,7 +282,7 @@ def main():
             args.gtag_id = (sidecar.get("settings") or {}).get("gtag_id")
         print(f"\n♻️  REGENERATE MODE")
         print(f"   {_describe_sources(sources)} from {sidecar_path}")
-        generator = InstagramSiteGenerator(data, output_dir, gtag_id=args.gtag_id)
+        generator = InstagramSiteGenerator(data, output_dir, gtag_id=args.gtag_id, theme_dir=args.theme)
         if generator.generate():
             print("\n✅ PROCESS COMPLETE")
             print(f"   Website regenerated at: {output_dir}")
@@ -345,7 +354,7 @@ def main():
             "city_tags": city_tags,
         }
         print("\n🌐 GENERATING WEBSITE")
-        generator = InstagramSiteGenerator(data, output_dir, gtag_id=args.gtag_id)
+        generator = InstagramSiteGenerator(data, output_dir, gtag_id=args.gtag_id, theme_dir=args.theme)
         if generator.generate():
             print("\n✅ PROCESS COMPLETE")
             print(f"   Website generated at: {output_dir}")
@@ -493,7 +502,7 @@ def main():
             "sources": sources,
             "city_tags": city_tags,
         }
-        generator = InstagramSiteGenerator(package, output_dir, gtag_id=args.gtag_id)
+        generator = InstagramSiteGenerator(package, output_dir, gtag_id=args.gtag_id, theme_dir=args.theme)
         success = generator.generate()
 
         if success:
