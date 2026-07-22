@@ -27,6 +27,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var PROVIDERS = [
         {
             key: 'posts',
+            label: function (n) { return n + ' post' + (n === 1 ? '' : 's'); },
             data: function () { return window.postData; },
             timeOf: function (key) { return parseInt(key, 10); },
             tile: function (key, entry) { return window.mmTiles.post(key, entry); },
@@ -44,6 +45,7 @@ document.addEventListener('DOMContentLoaded', function () {
         },
         {
             key: 'stories',
+            label: function (n) { return n + ' stor' + (n === 1 ? 'y' : 'ies'); },
             data: function () { return window.storiesData; },
             timeOf: function (key) { return parseInt(key, 10); },
             tile: function (key, entry) { return window.mmTiles.story(key, entry); },
@@ -60,6 +62,7 @@ document.addEventListener('DOMContentLoaded', function () {
         },
         {
             key: 'flickr',
+            label: function (n) { return 'Flickr photos and videos (' + n + ')'; },
             data: function () { return window.flickrData; },
             // Flickr entries are keyed by photo id, not timestamp — the date
             // lives in the entry itself.
@@ -191,6 +194,12 @@ document.addEventListener('DOMContentLoaded', function () {
             PROVIDERS.forEach(function (provider) {
                 var items = byYear[year][provider.key];
                 if (items && items.length) {
+                    // Match the timeline's per-day layout: a little labelled
+                    // count above each source's row.
+                    var label = document.createElement('div');
+                    label.className = 'timeline-row-label';
+                    label.textContent = provider.label(items.length);
+                    section.appendChild(label);
                     section.appendChild(buildRow(provider, items));
                 }
             });
