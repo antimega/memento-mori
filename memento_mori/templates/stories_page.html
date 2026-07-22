@@ -30,7 +30,6 @@
       {% include "_nav.html" %}
       
       <div class="stories-container">
-        <h2 class="section-title">Stories</h2>
         <div class="stories-grid">
           {% for story in stories %}
           <a class="story-item" data-index="{{ story.index }}" data-timestamp="{{ story.timestamp }}" href="stories.html?story={{ story.timestamp }}">
