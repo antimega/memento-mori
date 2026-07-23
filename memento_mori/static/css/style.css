@@ -1517,6 +1517,20 @@ a.story-item {
   appearance: none;
   -webkit-appearance: none;
   cursor: pointer;
+  /* Flickr machine tags (ffffound:id=<40 hex chars>, foursquare:venue=<hex>,
+     uploaded:by=…) are single unbreakable tokens, wider than a phone's
+     content box. Without these the chip stays at its min-content width and
+     overflows sideways — and because .tag-index sets overflow-y, overflow-x
+     computes to auto rather than visible, so the overflow surfaces as a
+     horizontal scrollbar over the whole index.
+     `anywhere`, not `break-word`: only `anywhere` shrinks min-content, which
+     is what the flex item is sized from. */
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  /* Buttons centre their text by default; a wrapped chip reads better with
+     its continuation lines under the start of the label. No effect on
+     single-line chips, which are shrink-to-fit. */
+  text-align: left;
 }
 
 .city-chip:hover {
