@@ -268,6 +268,29 @@ footer {
   min-width: 0;
 }
 
+/* Skip layout and paint for off-screen tiles.
+   ------------------------------------------------------------------
+   The posts, flickr and stories grids server-render EVERY tile. On a large
+   archive that is tens of thousands of tiles and ~30k DOM nodes per page, and
+   laying them all out costs real time on every load — CPU work that no amount
+   of HTTP caching avoids.
+
+   content-visibility lets the browser skip layout/painting for tiles outside
+   the viewport, which is nearly all of them. contain-intrinsic-size supplies
+   placeholder dimensions so the scrollbar doesn't jump; the `auto` keyword
+   makes the browser remember each tile's real size once rendered, so the fixed
+   fallback only applies to tiles not yet seen (its exact value is
+   viewport-dependent and stops mattering after first paint).
+
+   Measured on a 6,283-post / 6,062-story archive: forced layout 125ms -> 22ms
+   on the posts grid and 89ms -> 31ms on the stories grid, scroll height
+   unchanged. The timeline and cities pages build a month at a time and use
+   .timeline-posts/.timeline-stories, so they don't need this. */
+.posts-grid > .grid-item {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 293px auto 313px;
+}
+
 /* The square image box inside a post tile; the place caption sits below.
    .otd-tile is the cloned post tile in the "On this day" view (it drops the
    .grid-item class so the viewers don't bind to it). */
@@ -919,6 +942,13 @@ footer {
 .stories-grid .story-item {
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
   transition: transform 0.3s ease;
+}
+
+/* Same off-screen skipping as .posts-grid > .grid-item above — see the long
+   comment there for why. */
+.stories-grid > .story-item {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 175px auto 311px;
 }
 
 .story-media {
