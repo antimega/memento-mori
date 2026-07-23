@@ -337,6 +337,42 @@ You can upload the entire output directory to any static web host to share it on
 
 Most static hosts serve these text files with gzip/brotli compression automatically, which shrinks the transferred size by roughly 85% — so the over-the-wire cost is far smaller than the on-disk size.
 
+## Hosting your site online
+
+The output is a plain folder of static files, so in principle any static host will serve it. In practice, two properties of a photo archive narrow the field. Measure yours before you shop:
+
+```bash
+du -sh output                    # total size
+find output -type f | wc -l      # total number of files
+```
+
+A few years of Instagram plus a Flickr archive easily reaches **tens of gigabytes across 100,000+ files** — and the file *count* is usually the limit you hit first.
+
+**Two things rule out most "deploy from git" hosts:**
+
+- **File-count limits.** Budget shared hosting advertises unlimited space but caps *inodes*, often at 150,000–250,000. Cloudflare Pages rejects deployments over 20,000 files. Check the file-count allowance, not just the gigabytes.
+- **Your media isn't in git.** `media/` and `thumbnails/` are far too large to commit, so hosts that deploy by pulling a repository — GitHub Pages, Netlify, Vercel — would publish a site with every image broken. (GitHub Pages also has a ~1 GB soft limit.)
+
+Note too that the pages reference media with **relative paths** (`media/…`, `thumbnails/…`), so the HTML and the media must be served from the same origin. You can't host the pages one place and the images another without rewriting those paths.
+
+**What to look for:**
+
+- SSH access with `rsync` — or an S3-compatible API, if you prefer object storage
+- Room for the archive, with headroom to grow
+- No file-count cap, or one comfortably above your count
+- Generous bandwidth; the media is the bulk of what you'll serve
+- Nothing else — no PHP, no database, no build step
+
+**Keeping it in sync.** `rsync` transfers only what actually changed, which is exactly what you want when the media never changes but the HTML is rewritten on every run:
+
+```bash
+rsync -avz --delete ./output/ user@host:/var/www/your-site/
+```
+
+The first upload moves everything and will take a while — add `--partial --progress` so it can resume if interrupted. Every run after that sends only the regenerated HTML and any genuinely new media. Use `--dry-run` the first time you combine this with `--delete`.
+
+**Options that fit.** A small VPS running nginx is the simplest mental model: `rsync`, correct MIME types from file extensions, index pages and cache headers all come for free. Object storage with a CDN (Cloudflare R2, Backblaze B2, Bunny) is cheaper, has no file-count limits, and can have much better bandwidth economics — you sync with `rclone` instead. The trade-off is that object storage serves objects by exact key, so you may need a small worker function to map `/` to `index.html`, and every object carries its own Content-Type and cache headers rather than inheriting them from a server config.
+
 ## Updating an existing site
 
 When you download a fresh Instagram export later on, you don't need to rebuild from scratch. `--merge` folds the new posts and stories into your existing site — only new media is processed, and your city tags, favourites, city text, and Flickr section are all preserved:
