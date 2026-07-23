@@ -14,6 +14,8 @@ from tests.helpers import (
     assert_no_browser_only_fields_in_sidecar,
     assert_thumbnails_resolve,
     decode_browser_data,
+    ig_posts,
+    ig_stories,
     read_data_json,
 )
 
@@ -181,6 +183,41 @@ def test_timeline_renders_only_the_newest_month(built):
     html = (built["out"] / "index.html").read_text(encoding="utf-8")
     assert html.count('class="timeline-month"') == 1
     assert '<select' in html and 'id="monthSelect"' in html
+
+
+def test_grids_seed_only_a_first_chunk_of_tiles(built):
+    """
+    The posts and stories grids ship a fixed seed of tiles, not the whole
+    archive: posts-grid.js / stories-grid.js append the rest from the browser
+    data as the reader scrolls.
+
+    Shipping every tile is what made these pages slow to become interactive —
+    tens of thousands of DOM nodes re-parsed and re-laid-out on every load,
+    which no HTTP caching avoids. Guard the seeding so that can't come back.
+    """
+    from memento_mori.generator import GRID_SEED
+
+    out = built["out"]
+    posts_html = (out / "posts.html").read_text(encoding="utf-8")
+    stories_html = (out / "stories.html").read_text(encoding="utf-8")
+
+    tiles = posts_html.count('class="grid-item"')
+    story_tiles = stories_html.count('class="story-item"')
+    total_posts = len(ig_posts(out))
+    total_stories = len(ig_stories(out))
+
+    # The fixture may hold fewer items than the seed; never more than the seed.
+    assert tiles == min(GRID_SEED, total_posts), (
+        f"posts.html server-rendered {tiles} tiles, expected "
+        f"{min(GRID_SEED, total_posts)}"
+    )
+    assert story_tiles == min(GRID_SEED, total_stories)
+
+    # ...and the builders that append the remainder must actually be loaded.
+    assert "js/posts-grid.js" in posts_html
+    assert "js/stories-grid.js" in stories_html
+    assert 'id="postsGrid"' in posts_html
+    assert 'id="storiesGrid"' in stories_html
 
 
 def test_no_style_blocks_or_profile_picture(built):

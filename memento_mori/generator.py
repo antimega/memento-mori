@@ -1,6 +1,7 @@
 # memento_mori/generator.py
 import os
 import json
+import itertools
 import shutil
 import datetime
 from pathlib import Path
@@ -39,6 +40,16 @@ _OPTIONAL_ENTRY_FIELDS = ("pl", "tt", "im", "l", "c", "la", "lo")
 
 # A standard md5 thumbnail path, e.g. thumbnails/<32 hex>.webp
 _THUMB_URL_RE = re.compile(r"^thumbnails/([0-9a-f]{32})\.webp$")
+
+# How many tiles the posts and stories grids ship in the HTML. The rest are
+# appended from the browser data as the reader scrolls (posts-grid.js,
+# stories-grid.js — the same approach flickr-grid.js has always used).
+#
+# Shipping every tile meant tens of thousands of DOM nodes on a large archive,
+# which the browser re-parses and re-lays-out on EVERY load: CPU work that HTTP
+# caching cannot avoid, so the page painted fast but took seconds to become
+# clickable. Enough here to fill a tall viewport before the first batch lands.
+GRID_SEED = 60
 
 
 def _thumb_field(url):
@@ -447,9 +458,13 @@ class InstagramSiteGenerator:
             print("Warning: No valid posts data found for grid rendering")
             return ""
 
-        # Prepare data for the grid template
+        # Prepare data for the grid template. Only the first GRID_SEED tiles
+        # are server-rendered; posts-grid.js appends the rest from
+        # window.postData as the reader scrolls.
         grid_posts = []
-        for i, (timestamp, post) in enumerate(posts_data.items()):
+        for i, (timestamp, post) in enumerate(
+            itertools.islice(posts_data.items(), GRID_SEED)
+        ):
             # Determine which media to use for the grid thumbnail
             display_media = self._get_display_media(post, i >= lazy_after)
 
@@ -550,11 +565,15 @@ class InstagramSiteGenerator:
             print("No stories data found, skipping stories.html generation")
             return
         
-        # Prepare stories data for the template
+        # Prepare stories data for the template. Only the first GRID_SEED
+        # tiles are server-rendered; stories-grid.js appends the rest from
+        # window.storiesData as the reader scrolls.
         stories_list = []
         lazy_after = 30  # Start lazy loading after this many stories
-        
-        for i, (timestamp, story) in enumerate(stories_data.items()):
+
+        for i, (timestamp, story) in enumerate(
+            itertools.islice(stories_data.items(), GRID_SEED)
+        ):
             # Check for story-specific thumbnail
             story_thumb = story.get("story_thumb", None)
             

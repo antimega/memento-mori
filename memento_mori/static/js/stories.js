@@ -72,9 +72,22 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Open a story by index
     function openStory(index) {
-        // Get all story items in their current order
-        storyItems = Array.from(document.querySelectorAll('.story-item'));
-        currentStoryIndex = storyItems.findIndex(item => parseInt(item.getAttribute('data-index')) === index);
+        // storyItems holds TIMESTAMPS in display order, not DOM nodes: on
+        // stories.html only a first chunk of tiles is in the DOM, so walking
+        // .story-item would stop navigation at the last appended tile.
+        // stories-grid.js publishes the full order; the DOM walk is the
+        // fallback for pages that render their own story set (the timeline
+        // and cities), where every tile on the page really is present.
+        if (Array.isArray(window.mmStoriesOrder) && window.mmStoriesOrder.length) {
+            storyItems = window.mmStoriesOrder;
+        } else {
+            storyItems = Array.from(document.querySelectorAll('.story-item'))
+                .map(item => item.getAttribute('data-timestamp'));
+        }
+        currentStoryIndex = storyItems.findIndex(function (ts) {
+            const entry = window.storiesData && window.storiesData[ts];
+            return entry && entry.i === index;
+        });
 
         if (currentStoryIndex === -1) return;
 
@@ -96,7 +109,7 @@ document.addEventListener('DOMContentLoaded', function() {
         storyClose.focus();
 
         // Update URL with story info
-        const timestamp = storyItems[currentStoryIndex].getAttribute('data-timestamp');
+        const timestamp = storyItems[currentStoryIndex];
         if (timestamp) {
             const url = new URL(window.location.href);
             url.searchParams.set('story', timestamp);
@@ -186,8 +199,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Helper function to load story content into a slide
     function loadStoryContent(slide, index) {
-        const storyItem = storyItems[index];
-        const timestamp = storyItem.getAttribute('data-timestamp');
+        const timestamp = storyItems[index];
         const storyData = window.storiesData[timestamp];
     
         if (!storyData) {
@@ -335,7 +347,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 newSlide.classList.add('active');
             
                 // Update URL
-                const timestamp = storyItems[currentStoryIndex].getAttribute('data-timestamp');
+                const timestamp = storyItems[currentStoryIndex];
                 if (timestamp) {
                     const url = new URL(window.location.href);
                     url.searchParams.set('story', timestamp);
@@ -351,7 +363,7 @@ document.addEventListener('DOMContentLoaded', function() {
             loadCurrentStory();
         
             // Update URL
-            const timestamp = storyItems[currentStoryIndex].getAttribute('data-timestamp');
+            const timestamp = storyItems[currentStoryIndex];
             if (timestamp) {
                 const url = new URL(window.location.href);
                 url.searchParams.set('story', timestamp);

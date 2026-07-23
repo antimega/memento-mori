@@ -271,17 +271,29 @@ editor's overlay/export like everything else.
 All pages: server-rendered semantic HTML, deferred data scripts, viewers opened
 by **index**, deep links via `?post=`/`?story=`, UTC date basis throughout.
 
-- **`posts.html`** — posts grid. Server-renders **all** post tiles (via
-  `grid.html`). Loads `posts-data.js` + `modal.js` + vendored Leaflet (all
-  deferred; Leaflet powers the modal's per-post location map). Sort buttons —
-  **Newest / Oldest / Random only** — reorder tiles in place. (The old Most
-  Likes / Most Comments / Most Views buttons were removed: never wired up,
-  and the counts are empty in this archive.) Deep link `?post=TS[&image=N]`.
+- **`posts.html`** — posts grid. Server-renders only the first `GRID_SEED`
+  (60) post tiles via `grid.html`; **`posts-grid.js` appends the rest** from
+  `window.postData` as the reader scrolls, and owns the **Newest / Oldest /
+  Random** sort row (sorting reorders the *data* and rebuilds — it cannot
+  reorder DOM nodes that aren't there yet). Loads `posts-data.js` +
+  `modal.js` + `posts-grid.js` + vendored Leaflet (all deferred; Leaflet
+  powers the modal's per-post location map). Deep link `?post=TS[&image=N]`
+  works for any post, rendered or not — `openModal` resolves via
+  `postIndexToTimestamp` → `window.postData`, never the DOM.
 
 - **`stories.html`** (from template `stories_page.html`) — stories grid.
-  Server-renders **all** story tiles. Loads `stories-data.js` + `stories.js`.
-  Deep link `?story=TS`. (Note: `templates/stories.html` exists but is **not**
-  used by the generator — the page comes from `stories_page.html`.)
+  Same deal: the first `GRID_SEED` tiles are server-rendered and
+  **`stories-grid.js` appends the rest** from `window.storiesData`. No sort
+  row on this page. Loads `stories-data.js` + `stories.js` +
+  `stories-grid.js`. Deep link `?story=TS`. (Note: `templates/stories.html`
+  exists but is **not** used by the generator — the page comes from
+  `stories_page.html`.)
+
+  **Why both are progressive (added after the fact):** shipping every tile
+  meant ~28–31k DOM nodes per page on a large archive, re-parsed and
+  re-laid-out on *every* load. That is CPU work no HTTP caching avoids, so
+  the pages painted fast but took seconds to become clickable. `flickr.html`
+  had always dodged this; the Instagram grids now use the same pattern.
 
 - **`index.html`** (the home page, from template `index.html`) — the timeline,
   and the one structurally different page. **Only the newest month is
@@ -318,7 +330,22 @@ by **index**, deep links via `?post=`/`?story=`, UTC date basis throughout.
   listener — IO alone stalls when the sentinel never leaves rootMargin) and
   provides Newest/Oldest/Random sorting. It exposes `window.mmFlickrOrder`
   (the current sort's full id list), which the viewer uses for prev/next so
-  navigation spans the whole archive even before tiles are appended. Tiles
+  navigation spans the whole archive even before tiles are appended.
+
+  > The Instagram grids now do the same thing, and publish the same kind of
+  > list — mind the differing element type, which follows what each viewer
+  > navigates by:
+  > | global | set by | holds | read by |
+  > |---|---|---|---|
+  > | `mmFlickrOrder` | `flickr-grid.js`, cities/tags/albums/OTD | photo **ids** | `flickr-viewer.js` |
+  > | `mmPostsOrder` | `posts-grid.js` | post **indexes** | `modal.js` `navigatePost` |
+  > | `mmStoriesOrder` | `stories-grid.js` | **timestamps** | `stories.js` `openStory` |
+  >
+  > Each reader falls back to walking the DOM when its global is absent, which
+  > is what keeps the timeline, cities and map pages working unchanged — there
+  > every tile on the page really is in the DOM.
+
+  Tiles
   link to the Flickr photopage as the no-JS fallback. The viewer
   (`_flickr_viewer.html` + `flickr-viewer.js`) is a deliberately trimmed
   sibling of modal.js — single-media, no carousel — with the same

@@ -1,7 +1,6 @@
 // memento_mori/static/js/modal.js
 document.addEventListener('DOMContentLoaded', function () {
     // Get DOM elements
-    const postsGrid = document.getElementById('postsGrid');
     const postModal = document.getElementById('postModal');
     const closeModalBtn = document.getElementById('closeModal');
     const modalPrev = document.getElementById('modalPrev');
@@ -12,13 +11,11 @@ document.addEventListener('DOMContentLoaded', function () {
     const postDate = document.getElementById('postDate');
     const postPlace = document.getElementById('postPlace');
     const postUsername = document.getElementById('postUsername');
-    const sortLinks = document.querySelectorAll('.sort-link');
 
     // Global variables to track current post and indexes
     let currentPostIndex = -1;
     let currentSlideIndex = 0;
     let postIndexToTimestamp = {}; // Map post index to timestamp
-    let currentSortType = 'newest'; // Default sort
     let modalOpen = false;          // Whether the dialog is open (for the focus trap)
     let lastFocused = null;         // Element to restore focus to on close
     let postMap = null;             // Lazily-created Leaflet map for the post location
@@ -68,88 +65,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // Attach click listeners to grid items
         attachGridItemListeners();
-
-        // Initialize sorting functionality
-        initializeSorting();
     }
 
-    // Initialize sorting functionality
-    function initializeSorting() {
-        // Add event listeners to sort links
-        sortLinks.forEach(link => {
-            link.addEventListener('click', function (e) {
-                e.preventDefault();
-
-                // Update active state
-                sortLinks.forEach(l => {
-                    l.classList.remove('active');
-                    l.removeAttribute('aria-current');
-                });
-                this.classList.add('active');
-                this.setAttribute('aria-current', 'true');
-
-                // Get sort type and sort posts
-                const sortType = this.getAttribute('data-sort');
-                currentSortType = sortType;
-                sortPosts(sortType);
-            });
-        });
-    }
-
-    // Sort posts based on selected criteria
-    function sortPosts(sortType) {
-        // Get all grid items
-        let gridItems = Array.from(document.querySelectorAll('.grid-item'));
-
-        // Sort the grid items based on the selected criteria
-        switch (sortType) {
-            case 'newest':
-                // Sort by timestamp (newest first) - this is the default
-                gridItems.sort((a, b) => {
-                    const indexA = parseInt(a.getAttribute('data-index'));
-                    const indexB = parseInt(b.getAttribute('data-index'));
-                    const timestampA = getTimestampByIndex(indexA);
-                    const timestampB = getTimestampByIndex(indexB);
-                    return timestampB - timestampA;
-                });
-                break;
-
-            case 'oldest':
-                // Sort by timestamp (oldest first)
-                gridItems.sort((a, b) => {
-                    const indexA = parseInt(a.getAttribute('data-index'));
-                    const indexB = parseInt(b.getAttribute('data-index'));
-                    const timestampA = getTimestampByIndex(indexA);
-                    const timestampB = getTimestampByIndex(indexB);
-                    return timestampA - timestampB;
-                });
-                break;
-
-            case 'random':
-                // Shuffle the grid items randomly
-                gridItems.sort(() => Math.random() - 0.5);
-                break;
-        }
-
-        // Reorder the grid items in the DOM
-        const fragment = document.createDocumentFragment();
-        gridItems.forEach(item => {
-            fragment.appendChild(item);
-        });
-
-        // Clear the grid and append the sorted items
-        postsGrid.innerHTML = '';
-        postsGrid.appendChild(fragment);
-
-        // Reattach event listeners to grid items
-        attachGridItemListeners();
-    }
-
-    // Helper function to get timestamp by post index
-    function getTimestampByIndex(index) {
-        const timestamp = postIndexToTimestamp[index];
-        return parseInt(timestamp);
-    }
+    // Sorting lives in posts-grid.js.
+    // It used to live here, back when the server shipped every tile and
+    // sorting meant reordering DOM nodes that were already present. The posts
+    // grid is now progressive — only a first chunk is in the DOM — so sorting
+    // has to reorder the *data* and rebuild, which is the grid builder's job.
+    // Doing it in both places would double-handle every click on .sort-link.
 
     // One delegated click listener covers every .grid-item tile (thousands
     // on the larger pages) — much cheaper than binding each tile, and
@@ -580,15 +503,24 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
 
-        // Get all grid items in their current sorted order.
+        // Prefer an explicit order published by a progressive grid: on
+        // posts.html only a first chunk of tiles is in the DOM, so walking
+        // .grid-item would stop navigation at the last appended tile.
+        // posts-grid.js publishes every post index in the current sort order.
+        //
+        // The DOM walk remains the fallback for pages that render their own
+        // tile set and have no such list — the timeline, cities and map.
         // Flickr tiles share the .grid-item class but carry data-id instead
         // of data-index, so they parse to NaN — drop them or they become
-        // dead stops in the post carousel on any page that mixes sources
-        // (the timeline and the map).
-        const gridItems = Array.from(document.querySelectorAll('.grid-item'));
-        const gridIndexes = gridItems
-            .map(item => parseInt(item.getAttribute('data-index')))
-            .filter(index => !isNaN(index));
+        // dead stops in the post carousel on any page that mixes sources.
+        let gridIndexes;
+        if (Array.isArray(window.mmPostsOrder) && window.mmPostsOrder.length) {
+            gridIndexes = window.mmPostsOrder;
+        } else {
+            gridIndexes = Array.from(document.querySelectorAll('.grid-item'))
+                .map(item => parseInt(item.getAttribute('data-index')))
+                .filter(index => !isNaN(index));
+        }
 
         // Find the position of the current post in the sorted grid
         const currentPosition = gridIndexes.indexOf(currentPostIndex);
