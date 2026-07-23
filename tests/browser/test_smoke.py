@@ -22,11 +22,49 @@ def test_index_renders_tiles_and_opens_the_modal(page, base_url):
 
 
 def test_index_sorting_reorders_tiles(page, base_url):
+    """
+    Sorting must order by TIME, not by import index.
+
+    The import index is only roughly chronological for Instagram, so sorting
+    by it put "Oldest" years after the true start of the archive. Asserting
+    only that "the first tile changed" does not catch that — compare the
+    actual timestamps against the whole dataset.
+    """
     page.goto(f"{base_url}/posts.html")
     first_before = page.locator(".grid-item").first.get_attribute("data-timestamp")
+
     page.locator('.sort-link[data-sort="oldest"]').click()
     first_after = page.locator(".grid-item").first.get_attribute("data-timestamp")
     assert first_before != first_after, "oldest-first did not reorder the grid"
+
+    # The first tile must be the genuine minimum timestamp in postData...
+    oldest_in_data = page.evaluate(
+        "Math.min.apply(null, Object.keys(window.postData).map(Number))"
+    )
+    assert int(first_after) == oldest_in_data, (
+        f"'Oldest' starts at {first_after} but the archive starts at "
+        f"{oldest_in_data} — sorting is not by time"
+    )
+    # ...and the rendered run must ascend.
+    stamps = page.evaluate(
+        "[...document.querySelectorAll('.grid-item')]"
+        ".map(e => Number(e.getAttribute('data-timestamp')))"
+    )
+    assert stamps == sorted(stamps), "oldest-first tiles are not in time order"
+
+    # Newest is the mirror image.
+    page.locator('.sort-link[data-sort="newest"]').click()
+    newest_in_data = page.evaluate(
+        "Math.max.apply(null, Object.keys(window.postData).map(Number))"
+    )
+    assert int(page.locator(".grid-item").first.get_attribute("data-timestamp")) \
+        == newest_in_data
+
+    # Every sort must still span the whole archive, not just what is rendered.
+    assert page.evaluate(
+        "window.mmPostsOrder.length === Object.keys(window.postData).length"
+    ), "the published navigation order does not span the archive"
+
     # tiles must still open after a reorder (delegation, not per-tile binding)
     page.locator(".grid-item").first.click()
     page.locator("#postModal").wait_for(state="visible", timeout=5000)

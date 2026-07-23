@@ -76,13 +76,27 @@ document.addEventListener('DOMContentLoaded', function () {
     var BATCH = 300;
     var buildTile = window.mmPostsGridTile;
 
-    // Newest-first order = the stable import index i, matching the order the
-    // generator writes tiles in.
-    var newestFirst = Object.keys(window.postData).sort(function (a, b) {
+    // The order the generator seeds its tiles in: the stable import index i.
+    // The initial order MUST match this exactly, or the first appended batch
+    // would repeat or skip the posts already in the HTML.
+    var seedOrder = Object.keys(window.postData).sort(function (a, b) {
         return window.postData[a].i - window.postData[b].i;
     });
 
-    var order = newestFirst.slice();
+    // Sorting goes by TIME, not by index. The import index is only roughly
+    // chronological for Instagram — a 6,283-post archive had 186 neighbouring
+    // pairs out of order, enough that sorting by index put "Oldest" in 2015
+    // when the archive starts in 2013. The keys are unix timestamps, so
+    // compare those. (modal.js, which used to own this sort row, looked up
+    // timestamps for the same reason. flickr-grid.js can safely sort by index
+    // because Flickr's i *is* strictly chronological.)
+    function byTime(newestFirst) {
+        return Object.keys(window.postData).sort(function (a, b) {
+            return newestFirst ? Number(b) - Number(a) : Number(a) - Number(b);
+        });
+    }
+
+    var order = seedOrder.slice();
     publishOrder();
     var appended = grid.querySelectorAll('.grid-item').length;
 
@@ -130,11 +144,11 @@ document.addEventListener('DOMContentLoaded', function () {
     // Sorting — same controls and aria-current handling as flickr.html
     function resort(kind) {
         if (kind === 'newest') {
-            order = newestFirst.slice();
+            order = byTime(true);
         } else if (kind === 'oldest') {
-            order = newestFirst.slice().reverse();
+            order = byTime(false);
         } else {
-            order = newestFirst.slice();
+            order = seedOrder.slice();
             for (var i = order.length - 1; i > 0; i--) {  // Fisher-Yates
                 var j = Math.floor(Math.random() * (i + 1));
                 var t = order[i]; order[i] = order[j]; order[j] = t;
