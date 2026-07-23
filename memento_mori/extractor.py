@@ -18,7 +18,13 @@ class InstagramArchiveExtractor:
     - Clean up temporary files after processing
     """
 
-    REQUIRED_FILES = ["profile", "posts"]
+    # Identity is genuinely required. Content is not tied to one type: an
+    # export period with only stories (or only posts) is normal, so posts and
+    # stories are each optional on their own — but an archive with NEITHER
+    # can't build a site. The content requirement is checked separately in
+    # validate_structure().
+    REQUIRED_FILES = ["profile"]
+    CONTENT_FILES = ["posts", "stories"]
 
     def __init__(self, input_path=None, output_path=None, cleanup=True):
         """
@@ -179,6 +185,15 @@ class InstagramArchiveExtractor:
 
         if not valid:
             print(f"Missing required files: {', '.join(missing_files)}")
+            return False
+
+        # ...and at least one kind of content. posts/stories are each optional
+        # on their own, but an archive with neither isn't a site.
+        if not any(self.file_mapper.get_file_path(t) for t in self.CONTENT_FILES):
+            print(
+                "No content found: an archive needs at least one of "
+                f"{', '.join(self.CONTENT_FILES)}."
+            )
             return False
 
         # For backward compatibility, update self.file_map
