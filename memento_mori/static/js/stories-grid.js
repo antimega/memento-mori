@@ -89,10 +89,14 @@ document.addEventListener('DOMContentLoaded', function () {
     var BATCH = 300;
     var buildTile = window.mmStoriesGridTile;
 
-    // Display order = the stable import index i, matching the order the
-    // generator writes tiles in.
+    // Newest-first by TIME, not by the import index: the index is only
+    // roughly chronological (26 neighbouring pairs out of order in a 6,062
+    // story archive), which left the grid subtly out of sequence. The keys are
+    // unix timestamps. The generator seeds its tiles the same way (see
+    // _newest_first in generator.py) — that agreement is what stops the first
+    // appended batch repeating or skipping the stories already in the HTML.
     var order = Object.keys(window.storiesData).sort(function (a, b) {
-        return window.storiesData[a].i - window.storiesData[b].i;
+        return Number(b) - Number(a);
     });
 
     // Published for stories.js's prev/next. Holds TIMESTAMPS (the storiesData

@@ -76,27 +76,26 @@ document.addEventListener('DOMContentLoaded', function () {
     var BATCH = 300;
     var buildTile = window.mmPostsGridTile;
 
-    // The order the generator seeds its tiles in: the stable import index i.
-    // The initial order MUST match this exactly, or the first appended batch
-    // would repeat or skip the posts already in the HTML.
-    var seedOrder = Object.keys(window.postData).sort(function (a, b) {
-        return window.postData[a].i - window.postData[b].i;
-    });
-
-    // Sorting goes by TIME, not by index. The import index is only roughly
-    // chronological for Instagram — a 6,283-post archive had 186 neighbouring
-    // pairs out of order, enough that sorting by index put "Oldest" in 2015
-    // when the archive starts in 2013. The keys are unix timestamps, so
-    // compare those. (modal.js, which used to own this sort row, looked up
-    // timestamps for the same reason. flickr-grid.js can safely sort by index
-    // because Flickr's i *is* strictly chronological.)
+    // Everything orders by TIME, never by the import index. The index is only
+    // roughly chronological for Instagram — a 6,283-post archive had 186
+    // neighbouring pairs out of order — which is enough to put "Oldest" in
+    // 2015 on an archive starting in 2013, and to leave the default view
+    // subtly out of sequence. The keys are unix timestamps, so compare those.
+    // (modal.js, which used to own this sort row, looked timestamps up for the
+    // same reason. flickr-grid.js can safely sort by index because Flickr's i
+    // *is* strictly chronological.)
+    //
+    // The generator seeds its tiles newest-first by timestamp too (see
+    // _newest_first in generator.py). That agreement matters: if the seed and
+    // this order differed, the first appended batch would repeat or skip
+    // posts already in the HTML.
     function byTime(newestFirst) {
         return Object.keys(window.postData).sort(function (a, b) {
             return newestFirst ? Number(b) - Number(a) : Number(a) - Number(b);
         });
     }
 
-    var order = seedOrder.slice();
+    var order = byTime(true);
     publishOrder();
     var appended = grid.querySelectorAll('.grid-item').length;
 
@@ -148,7 +147,7 @@ document.addEventListener('DOMContentLoaded', function () {
         } else if (kind === 'oldest') {
             order = byTime(false);
         } else {
-            order = seedOrder.slice();
+            order = byTime(true);
             for (var i = order.length - 1; i > 0; i--) {  // Fisher-Yates
                 var j = Math.floor(Math.random() * (i + 1));
                 var t = order[i]; order[i] = order[j]; order[j] = t;

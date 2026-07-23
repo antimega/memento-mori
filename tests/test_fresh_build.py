@@ -7,6 +7,7 @@ suite (and the multi-source restructure) depends on.
 """
 
 import json
+import re
 
 import pytest
 
@@ -218,6 +219,22 @@ def test_grids_seed_only_a_first_chunk_of_tiles(built):
     assert "js/stories-grid.js" in stories_html
     assert 'id="postsGrid"' in posts_html
     assert 'id="storiesGrid"' in stories_html
+
+    # The seed must be newest-first BY TIMESTAMP. The stored order follows the
+    # import index, which is only roughly chronological, so relying on it left
+    # the grids out of sequence — and, more seriously, the client builders sort
+    # by timestamp, so a differently-ordered seed would make the first appended
+    # batch repeat or skip items.
+    for html, attr in ((posts_html, "grid-item"), (stories_html, "story-item")):
+        stamps = [
+            int(m) for m in re.findall(
+                rf'class="{attr}" data-index="\d+" data-timestamp="(\d+)"', html
+            )
+        ]
+        assert stamps, f"no {attr} timestamps found to check"
+        assert stamps == sorted(stamps, reverse=True), (
+            f"{attr} seed is not newest-first by timestamp"
+        )
 
 
 def test_no_style_blocks_or_profile_picture(built):

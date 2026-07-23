@@ -52,6 +52,21 @@ _THUMB_URL_RE = re.compile(r"^thumbnails/([0-9a-f]{32})\.webp$")
 GRID_SEED = 60
 
 
+def _newest_first(entries):
+    """
+    (timestamp, entry) pairs in newest-first order by timestamp.
+
+    Posts and stories are keyed by unix timestamp, but the stored order (and
+    the import index `i` that follows it) is only *roughly* chronological — a
+    real 6,283-post archive had 186 neighbouring pairs out of sequence, and
+    6,062 stories had 26. The grids are chronological views, so they sort on
+    the key rather than trusting insertion order. The browser-side builders
+    (posts-grid.js, stories-grid.js) order the same way, which is what keeps
+    the server seed and the first appended batch from overlapping.
+    """
+    return sorted(entries.items(), key=lambda kv: int(kv[0]), reverse=True)
+
+
 def _thumb_field(url):
     """
     Map a server-resolved tile display URL to the browser-only field the
@@ -460,10 +475,14 @@ class InstagramSiteGenerator:
 
         # Prepare data for the grid template. Only the first GRID_SEED tiles
         # are server-rendered; posts-grid.js appends the rest from
-        # window.postData as the reader scrolls.
+        # window.postData as the reader scrolls — and it orders by timestamp,
+        # so the seed must too or the first appended batch would repeat or
+        # skip posts. Sorting here (rather than relying on the stored order)
+        # also makes the grid genuinely newest-first: the import index is only
+        # roughly chronological, so dict order left neighbours out of sequence.
         grid_posts = []
         for i, (timestamp, post) in enumerate(
-            itertools.islice(posts_data.items(), GRID_SEED)
+            itertools.islice(_newest_first(posts_data), GRID_SEED)
         ):
             # Determine which media to use for the grid thumbnail
             display_media = self._get_display_media(post, i >= lazy_after)
@@ -572,7 +591,7 @@ class InstagramSiteGenerator:
         lazy_after = 30  # Start lazy loading after this many stories
 
         for i, (timestamp, story) in enumerate(
-            itertools.islice(stories_data.items(), GRID_SEED)
+            itertools.islice(_newest_first(stories_data), GRID_SEED)
         ):
             # Check for story-specific thumbnail
             story_thumb = story.get("story_thumb", None)
