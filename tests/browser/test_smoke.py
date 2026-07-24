@@ -478,14 +478,13 @@ def _cluster_counts(page):
 
 def test_map_plots_every_geotagged_item(page, base_url):
     """
-    Cluster bubbles plus lone markers must account for every point — a
-    silently dropped source or a coordinate-shape mismatch shows up here.
+    Every geotagged item must be added to the map — a silently dropped source
+    or a coordinate-shape mismatch shows up here. Counted from the cluster
+    group, not the rendered DOM: the default view deliberately frames only the
+    bulk of the pins (and markercluster only renders what's on screen), so the
+    extremities aren't in the DOM at load.
     """
     _open_map(page, base_url)
-    counts = _cluster_counts(page)
-    lone = page.locator(".leaflet-marker-icon:not(.marker-cluster)").count()
-    assert counts, "no clusters rendered"
-
     expected = page.evaluate("""() => {
         let n = 0;
         for (const d of [window.postData, window.flickrData]) {
@@ -497,9 +496,8 @@ def test_map_plots_every_geotagged_item(page, base_url):
         }
         return n;
     }""")
-    assert sum(counts) + lone == expected, (
-        f"mapped {sum(counts)}+{lone} points, data has {expected}"
-    )
+    plotted = page.evaluate("window.mmPinClusters.getLayers().length")
+    assert plotted == expected, f"plotted {plotted} markers, data has {expected}"
 
 
 def test_map_markers_are_the_emoji_blue_dot(page, base_url):
@@ -602,11 +600,16 @@ def test_map_post_tile_opens_modal_with_working_arrows(page, base_url):
 
 def test_map_cluster_dblclick_zooms_in(page, base_url):
     _open_map(page, base_url)
-    zoom_before = page.evaluate("""() => {
-        const el = document.querySelector('.leaflet-container');
-        return el ? el.className : '';
-    }""")
+    # Frame every pin first: the default view is deliberately zoomed out and off
+    # the extremities, which can leave a single lumped cluster with nothing to
+    # drill into. Fitting the group's bounds restores a normal multi-cluster
+    # layout regardless of that default.
+    page.evaluate(
+        "window.mmPinMap.fitBounds(window.mmPinClusters.getBounds(), {padding:[30,30]})"
+    )
+    page.wait_for_timeout(1000)
     counts = _cluster_counts(page)
+    assert counts, "no clusters rendered"
     page.locator(".marker-cluster").nth(counts.index(max(counts))).dblclick()
     page.wait_for_timeout(1500)
     after = _cluster_counts(page)

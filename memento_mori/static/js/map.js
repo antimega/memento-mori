@@ -253,6 +253,12 @@ document.addEventListener('DOMContentLoaded', function () {
         // world and the trimmed-off extremities come back into view. Clamped to
         // minZoom (the world-fills-the-viewport floor set above).
         map.setZoom(Math.max(map.getMinZoom(), map.getZoom() - 2));
+
+        // Exposed for tests/debugging: the map and cluster group are otherwise
+        // closure locals. The group knows every marker regardless of what the
+        // (deliberately partial) default view happens to render.
+        window.mmPinMap = map;
+        window.mmPinClusters = group;
     }
 
     // Initialize only after layout is final, so Leaflet measures the real
