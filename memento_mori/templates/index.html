@@ -43,9 +43,11 @@
       {% set active_page = 'days' %}
       {% include "_nav.html" %}
 
-      <div class="timeline-views" role="group" aria-label="Timeline view">
-        <button type="button" id="viewTimeline" class="view-toggle active" aria-pressed="true">Timeline</button>
-        <button type="button" id="viewOnThisDay" class="view-toggle" aria-pressed="false">On this day</button>
+      <div class="sort-options">
+        <div class="sort-row" role="group" aria-label="Timeline view">
+          <button type="button" id="viewTimeline" class="sort-link active" aria-pressed="true">Timeline</button>
+          <button type="button" id="viewOnThisDay" class="sort-link" aria-pressed="false">On this day</button>
+        </div>
       </div>
 
       <div class="month-nav" id="monthNav">

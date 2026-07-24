@@ -12,8 +12,8 @@
 // stories.js uses for prev/next, so the viewer still walks the whole archive
 // even before the matching tiles have been appended.
 //
-// There is no sort row on stories.html, so unlike posts-grid.js this file has
-// no sorting to own.
+// This file also owns the Newest/Oldest/Random sort row on stories.html — the
+// same one posts-grid.js owns on posts.html.
 //
 // IMPORTANT: tile markup here must stay in step with the story tile in
 // templates/stories_page.html (classes, data-*, href, indicator, .story-info).
@@ -89,21 +89,28 @@ document.addEventListener('DOMContentLoaded', function () {
     var BATCH = 300;
     var buildTile = window.mmStoriesGridTile;
 
-    // Newest-first by TIME, not by the import index: the index is only
-    // roughly chronological (26 neighbouring pairs out of order in a 6,062
-    // story archive), which left the grid subtly out of sequence. The keys are
-    // unix timestamps. The generator seeds its tiles the same way (see
+    // Order by TIME, not by the import index: the index is only roughly
+    // chronological (26 neighbouring pairs out of order in a 6,062 story
+    // archive), which left the grid subtly out of sequence. The keys are unix
+    // timestamps. The generator seeds its tiles newest-first the same way (see
     // _newest_first in generator.py) — that agreement is what stops the first
     // appended batch repeating or skipping the stories already in the HTML.
-    var order = Object.keys(window.storiesData).sort(function (a, b) {
-        return Number(b) - Number(a);
-    });
+    function byTime(newestFirst) {
+        return Object.keys(window.storiesData).sort(function (a, b) {
+            return newestFirst ? Number(b) - Number(a) : Number(a) - Number(b);
+        });
+    }
+
+    var order = byTime(true);
+    publishOrder();
 
     // Published for stories.js's prev/next. Holds TIMESTAMPS (the storiesData
     // keys) because that is what the viewer looks entries up by — note this
     // differs from posts-grid.js's mmPostsOrder, which holds post indexes
     // because modal.js navigates by index.
-    window.mmStoriesOrder = order.slice();
+    function publishOrder() {
+        window.mmStoriesOrder = order.slice();
+    }
 
     var appended = grid.querySelectorAll('.story-item').length;
 
@@ -140,6 +147,38 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     window.addEventListener('scroll', maybeAppend, { passive: true });
     window.addEventListener('resize', maybeAppend, { passive: true });
+
+    // Sorting — same controls and aria-current handling as posts-grid.js.
+    function resort(kind) {
+        if (kind === 'newest') {
+            order = byTime(true);
+        } else if (kind === 'oldest') {
+            order = byTime(false);
+        } else {
+            order = byTime(true);
+            for (var i = order.length - 1; i > 0; i--) {  // Fisher-Yates
+                var j = Math.floor(Math.random() * (i + 1));
+                var t = order[i]; order[i] = order[j]; order[j] = t;
+            }
+        }
+        publishOrder();
+        grid.innerHTML = '';
+        appended = 0;
+        appendBatch();
+        window.scrollTo({ top: 0 });
+    }
+
+    document.querySelectorAll('.sort-link').forEach(function (link) {
+        link.addEventListener('click', function () {
+            document.querySelectorAll('.sort-link').forEach(function (l) {
+                l.classList.remove('active');
+                l.removeAttribute('aria-current');
+            });
+            link.classList.add('active');
+            link.setAttribute('aria-current', 'true');
+            resort(link.getAttribute('data-sort'));
+        });
+    });
 
     // Top the grid up immediately: the server chunk is small and may not fill
     // a tall viewport enough to trigger the observer.

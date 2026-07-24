@@ -90,7 +90,18 @@ document.addEventListener('DOMContentLoaded', function () {
         if (flickrMapMarker) {
             flickrMapMarker.setLatLng(latlng);
         } else {
-            flickrMapMarker = L.marker(latlng).addTo(flickrMap);
+            // Blue-dot pin (🔵) replacing Leaflet's default teardrop; the look
+            // lives in .mm-emoji-pin (css/style.css). Same icon as map.js,
+            // modal.js and cities.html — keep them in step.
+            flickrMapMarker = L.marker(latlng, {
+                icon: L.divIcon({
+                    html: '🔵',
+                    className: 'mm-emoji-pin',
+                    iconSize: [18, 18],   // box padded around the ~12px glyph (no clip)
+                    iconAnchor: [9, 9],   // centre the dot on the point
+                    popupAnchor: [0, -9],
+                }),
+            }).addTo(flickrMap);
         }
         setTimeout(function () {
             flickrMap.invalidateSize();

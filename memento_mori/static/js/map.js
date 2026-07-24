@@ -162,11 +162,28 @@ document.addEventListener('DOMContentLoaded', function () {
     // ---------------------------------------------------------------------
 
     function initMap() {
-        var map = L.map('pinMap', { fadeAnimation: false });
+        // Keep panning inside a single world: no infinite east/west scroll,
+        // and no grey void past the poles. 85.0511° is the Web Mercator
+        // latitude limit (matches the tile coverage). The cities map uses the
+        // same constraint.
+        var worldBounds = L.latLngBounds([-85.0511, -180], [85.0511, 180]);
+        var map = L.map('pinMap', {
+            fadeAnimation: false,
+            maxBounds: worldBounds,
+            maxBoundsViscosity: 1.0,
+        });
         L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19,
+            noWrap: true,   // don't repeat the world horizontally
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         }).addTo(map);
+        // Don't let zoom-out go below where one world fills the viewport (else
+        // grey shows around it). getBoundsZoom(..., true) is the smallest zoom
+        // whose view still fits inside the world; recompute it on resize so it
+        // adapts to the container width.
+        function clampMinZoom() { map.setMinZoom(map.getBoundsZoom(worldBounds, true)); }
+        clampMinZoom();
+        map.on('resize', clampMinZoom);
 
         var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         var group = L.markerClusterGroup({
@@ -183,8 +200,19 @@ document.addEventListener('DOMContentLoaded', function () {
             animate: !reduce,
         });
 
+        // Blue-dot pin (🔵) replacing Leaflet's default teardrop; the look
+        // lives in .mm-emoji-pin (css/style.css). The same icon is used by
+        // modal.js, flickr-viewer.js and cities.html — keep them in step. One
+        // shared instance across all ~14k markers (Leaflet allows reuse).
+        var pin = L.divIcon({
+            html: '🔵',
+            className: 'mm-emoji-pin',
+            iconSize: [18, 18],   // box padded around the ~12px glyph (no clip)
+            iconAnchor: [9, 9],   // centre the dot on the point
+            popupAnchor: [0, -9],
+        });
         var markers = points.map(function (point) {
-            var marker = L.marker([point.la, point.lo]);
+            var marker = L.marker([point.la, point.lo], { icon: pin });
             marker.mmPoint = point;
             return marker;
         });
@@ -208,7 +236,23 @@ document.addEventListener('DOMContentLoaded', function () {
 
         map.addLayer(group);
         map.invalidateSize();
-        map.fitBounds(group.getBounds(), { padding: [30, 30] });
+        // Frame the default view on where the pins mostly are, not the full
+        // extent: outliers on other continents otherwise zoom the map right
+        // out and leave it centred over open ocean. Fit to the central 80% of
+        // points on each axis (trimming a full 10% per side is enough to drop
+        // a secondary cluster — e.g. an Americas trip — that would otherwise
+        // drag the centre out into the Atlantic). The extremities are meant to
+        // sit outside the initial view; panning/zooming still reaches them.
+        var las = points.map(function (p) { return p.la; }).sort(function (a, b) { return a - b; });
+        var los = points.map(function (p) { return p.lo; }).sort(function (a, b) { return a - b; });
+        var lop = function (a) { return a[Math.floor((a.length - 1) * 0.10)]; };
+        var hip = function (a) { return a[Math.ceil((a.length - 1) * 0.90)]; };
+        map.fitBounds([[lop(las), lop(los)], [hip(las), hip(los)]], { padding: [30, 30] });
+        // Then back well out, keeping that centre: a wide, zoomed-out default
+        // reads better here than a tight one — you get the whole surrounding
+        // world and the trimmed-off extremities come back into view. Clamped to
+        // minZoom (the world-fills-the-viewport floor set above).
+        map.setZoom(Math.max(map.getMinZoom(), map.getZoom() - 2));
     }
 
     // Initialize only after layout is final, so Leaflet measures the real

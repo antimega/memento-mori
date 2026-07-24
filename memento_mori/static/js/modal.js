@@ -423,7 +423,18 @@ document.addEventListener('DOMContentLoaded', function () {
         if (postMapMarker) {
             postMapMarker.setLatLng(latlng);
         } else {
-            postMapMarker = L.marker(latlng).addTo(postMap);
+            // Blue-dot pin (🔵) replacing Leaflet's default teardrop; the look
+            // lives in .mm-emoji-pin (css/style.css). Same icon as map.js,
+            // flickr-viewer.js and cities.html — keep them in step.
+            postMapMarker = L.marker(latlng, {
+                icon: L.divIcon({
+                    html: '🔵',
+                    className: 'mm-emoji-pin',
+                    iconSize: [18, 18],   // box padded around the ~12px glyph (no clip)
+                    iconAnchor: [9, 9],   // centre the dot on the point
+                    popupAnchor: [0, -9],
+                }),
+            }).addTo(postMap);
         }
 
         // The modal was just shown; let layout settle, then have Leaflet

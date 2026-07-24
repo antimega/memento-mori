@@ -207,6 +207,28 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
+    // The On This Day view is a shareable state: index.html#on-this-day opens
+    // straight into it, and toggling keeps the hash in sync so the URL can be
+    // copied at any time. We use replaceState rather than assigning
+    // location.hash so there's no scroll-to-anchor jump and no history spam;
+    // replaceState never fires hashchange, so syncing here can't loop with the
+    // hashchange listener below. (The container id is "onThisDay", not
+    // "on-this-day", so the hash matches no element and the browser does no
+    // native anchor scrolling of its own.)
+    var HASH = '#on-this-day';
+    function syncHash(onThisDay) {
+        // replaceState can throw on file:// in some browsers; a shareable URL
+        // is meaningless for a local file anyway, so failing silently there is
+        // exactly right — the toggle still works, just without URL sync.
+        try {
+            if (onThisDay && location.hash !== HASH) {
+                history.replaceState(null, '', HASH);
+            } else if (!onThisDay && location.hash === HASH) {
+                history.replaceState(null, '', location.pathname + location.search);
+            }
+        } catch (e) { /* file:// — no history API; ignore */ }
+    }
+
     // View toggle
     function showView(onThisDay) {
         if (onThisDay) {
@@ -224,10 +246,22 @@ document.addEventListener('DOMContentLoaded', function () {
         btnOnThisDay.setAttribute('aria-pressed', String(onThisDay));
         btnTimeline.classList.toggle('active', !onThisDay);
         btnTimeline.setAttribute('aria-pressed', String(!onThisDay));
+        syncHash(onThisDay);
         window.scrollTo({ top: 0 });
     }
 
     btnOnThisDay.addEventListener('click', function () { showView(true); });
     btnTimeline.addEventListener('click', function () { showView(false); });
-    // Default view is Timeline (container starts hidden via markup).
+
+    // Respond to the hash changing under us — a pasted/opened #on-this-day
+    // link, an edited address bar, or Back/Forward landing on either state.
+    window.addEventListener('hashchange', function () {
+        showView(location.hash === HASH);
+    });
+
+    // Honour the hash on load: default view is Timeline (container starts
+    // hidden via markup), but a #on-this-day link opens On This Day directly.
+    if (location.hash === HASH) {
+        showView(true);
+    }
 });

@@ -141,6 +141,32 @@ def test_on_this_day_shows_planted_memories(page, base_url):
     page.locator("#postModal").wait_for(state="visible", timeout=5000)
 
 
+def test_on_this_day_is_a_shareable_hash(page, base_url):
+    """#on-this-day opens the view directly, toggling keeps the hash in sync,
+    and the hash survives a reload — i.e. the URL is genuinely shareable."""
+    # A cold load on the hash lands in On This Day, not the timeline.
+    page.goto(f"{base_url}/index.html#on-this-day")
+    otd = page.locator("#onThisDay")
+    otd.wait_for(state="visible", timeout=5000)
+    assert page.locator("#viewOnThisDay").get_attribute("aria-pressed") == "true"
+    assert page.locator(".timeline-container").is_hidden()
+
+    # Toggling back to the timeline clears the hash...
+    page.locator("#viewTimeline").click()
+    otd.wait_for(state="hidden", timeout=5000)
+    assert page.evaluate("location.hash") == ""
+
+    # ...and toggling into On This Day restores it, ready to copy.
+    page.locator("#viewOnThisDay").click()
+    otd.wait_for(state="visible", timeout=5000)
+    assert page.evaluate("location.hash") == "#on-this-day"
+
+    # The shared link survives a reload.
+    page.reload()
+    otd.wait_for(state="visible", timeout=5000)
+    assert page.locator("#viewOnThisDay").get_attribute("aria-pressed") == "true"
+
+
 # --------------------------------------------------------------------------
 # flickr pages
 # --------------------------------------------------------------------------
@@ -234,6 +260,48 @@ def test_stories_viewer_opens_and_does_not_auto_advance(page, base_url):
     shown = page.locator("#storyViewer .media-slide").first.get_attribute("src")
     page.wait_for_timeout(1500)  # auto-advance was 10s; it is now disabled
     assert page.locator("#storyViewer .media-slide").first.get_attribute("src") == shown
+
+
+def test_stories_sorting_reorders_tiles(page, base_url):
+    """Stories carry the same Newest/Oldest/Random row as posts, and it must
+    order by TIME (the story import index is only roughly chronological) — the
+    same failure mode covered for posts in test_index_sorting_reorders_tiles."""
+    page.goto(f"{base_url}/stories.html")
+    first_before = page.locator(".story-item").first.get_attribute("data-timestamp")
+
+    page.locator('.sort-link[data-sort="oldest"]').click()
+    first_after = page.locator(".story-item").first.get_attribute("data-timestamp")
+    assert first_before != first_after, "oldest-first did not reorder the grid"
+
+    oldest_in_data = page.evaluate(
+        "Math.min.apply(null, Object.keys(window.storiesData).map(Number))"
+    )
+    assert int(first_after) == oldest_in_data, (
+        f"'Oldest' starts at {first_after} but the archive starts at "
+        f"{oldest_in_data} — sorting is not by time"
+    )
+    stamps = page.evaluate(
+        "[...document.querySelectorAll('.story-item')]"
+        ".map(e => Number(e.getAttribute('data-timestamp')))"
+    )
+    assert stamps == sorted(stamps), "oldest-first tiles are not in time order"
+
+    # Newest is the mirror image.
+    page.locator('.sort-link[data-sort="newest"]').click()
+    newest_in_data = page.evaluate(
+        "Math.max.apply(null, Object.keys(window.storiesData).map(Number))"
+    )
+    assert int(page.locator(".story-item").first.get_attribute("data-timestamp")) \
+        == newest_in_data
+
+    # Every sort must still span the whole archive, not just what is rendered.
+    assert page.evaluate(
+        "window.mmStoriesOrder.length === Object.keys(window.storiesData).length"
+    ), "the published navigation order does not span the archive"
+
+    # tiles must still open after a reorder (delegation, not per-tile binding)
+    page.locator(".story-item").first.click()
+    page.locator("#storyViewer").wait_for(state="visible", timeout=5000)
 
 
 # --------------------------------------------------------------------------
@@ -432,6 +500,21 @@ def test_map_plots_every_geotagged_item(page, base_url):
     assert sum(counts) + lone == expected, (
         f"mapped {sum(counts)}+{lone} points, data has {expected}"
     )
+
+
+def test_map_markers_are_the_emoji_blue_dot(page, base_url):
+    """Markers use the 🔵 divIcon, not Leaflet's default teardrop <img>. The
+    cities map is the clean check: 8 markers, none clustered. A regression to a
+    bare L.marker() would bring back the teardrop PNG (and its grey-box divIcon
+    background)."""
+    page.goto(f"{base_url}/cities.html")
+    page.locator(".mm-emoji-pin").first.wait_for(state="visible", timeout=5000)
+    pins = page.locator(".mm-emoji-pin")
+    assert pins.count() > 0, "no emoji-dot markers rendered"
+    assert "🔵" in pins.first.inner_text()
+    # The default marker is an <img>; if it's gone, so is the teardrop.
+    assert page.locator("img.leaflet-marker-icon").count() == 0, \
+        "a default teardrop marker image is still being rendered"
 
 
 def test_map_starts_with_a_hint_and_no_selection(page, base_url):

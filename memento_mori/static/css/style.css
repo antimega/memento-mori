@@ -434,6 +434,48 @@ footer {
   z-index: 0; /* keep Leaflet panes under the modal controls */
 }
 
+/* Emoji blue-dot map pin (🔵) — replaces Leaflet's default teardrop marker on
+   every map. Leaflet's .leaflet-div-icon otherwise paints a white box with a
+   grey border behind the glyph, so both are cleared here. Sized to the
+   iconSize/iconAnchor set where the marker is built (map.js, modal.js,
+   flickr-viewer.js, cities.html). */
+.mm-emoji-pin {
+  background: none;
+  border: 0;
+  font-size: 12px;
+  line-height: 18px;         /* = iconSize: centres the ~12px glyph vertically
+                                with a couple of px clearance top and bottom, so
+                                the emoji's ascent overshoot can't clip at the
+                                top (visible on iOS Safari) */
+  text-align: center;
+}
+
+/* map.html marker-cluster bubbles: blue gradations in place of the vendored
+   green/yellow/orange. The number-bearing inner circle is opaque so the dark
+   count keeps a guaranteed contrast ratio on every tier (all pass WCAG AA);
+   the outer ring stays translucent as a halo. Double-class selectors beat the
+   vendored single-class rules, which load after this file on map.html. */
+.marker-cluster.marker-cluster-small     { background-color: rgba(207, 227, 254, 0.5); }
+.marker-cluster.marker-cluster-small div { background-color: #cfe3fe; }
+.marker-cluster.marker-cluster-medium     { background-color: rgba(157, 196, 246, 0.5); }
+.marker-cluster.marker-cluster-medium div { background-color: #9dc4f6; }
+.marker-cluster.marker-cluster-large     { background-color: rgba(107, 168, 236, 0.5); }
+.marker-cluster.marker-cluster-large div { background-color: #6ba8ec; }
+
+/* Map text uses the site font (Absans + its ss04 letterforms), not Leaflet's
+   bundled Helvetica. The container rule covers cities.html popups plus the
+   attribution and zoom controls; the marker-cluster counts set their own font
+   in the vendored CSS, so they need the second, more specific rule. Both
+   vendor sheets load after this file, hence the extra specificity. */
+main .leaflet-container {
+  font-family: inherit;
+  font-feature-settings: inherit;
+}
+.leaflet-marker-icon.marker-cluster div {
+  font-family: inherit;
+  font-feature-settings: inherit;
+}
+
 /* Editor: profile bio box — in the page flow, not a floating .editor-panel */
 .editor-bio {
   max-width: 600px;
@@ -904,7 +946,6 @@ footer {
 
   .sort-link {
     margin: 5px;
-    font-size: 13px;
     padding: 5px 0;
     flex: 0 0 auto;
   }
@@ -1380,8 +1421,18 @@ a.story-item {
     grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
   }
 
-  .timeline-stories {
-    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  /* Fixed 3 across, not auto-fill: minmax(80px) fits a 4th column on wider
+     phones (e.g. iPhone Pro), leaving the story thumbnails too small. The
+     stories-page grid gets the same treatment (its minmax(150px) auto-fill
+     otherwise drops to 2, which is too big). Both live here — after the base
+     .stories-grid rule above — so they win the cascade over it. */
+  .timeline-stories,
+  .stories-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .stories-grid {
+    gap: 8px;
   }
 }
 
@@ -1750,6 +1801,7 @@ body.fav-mode .editor-grid .timeline-story-tile {
 .month-nav {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 10px;
   margin: 20px 0 10px;
 }
@@ -1782,37 +1834,9 @@ body.fav-mode .editor-grid .timeline-story-tile {
   cursor: default;
 }
 
-/* Timeline / "On this day" view toggle */
-.timeline-views {
-  display: flex;
-  gap: 8px;
-  margin: 20px 0 10px;
-}
-
-.view-toggle {
-  padding: 8px 16px;
-  border: 1px solid #dbdbdb;
-  border-radius: 18px;
-  background: #fff;
-  color: var(--instagram-text);
-  font-family: inherit;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  appearance: none;
-  -webkit-appearance: none;
-}
-
-.view-toggle:hover:not(.active) {
-  background: #fafafa;
-  border-color: var(--text-secondary);
-}
-
-.view-toggle.active {
-  background: #262626;
-  border-color: #262626;
-  color: #fff;
-}
+/* The Timeline / "On this day" view toggle reuses the shared .sort-options /
+   .sort-row / .sort-link styling (the Newest/Oldest/Random row on the other
+   pages), so it needs no rules of its own. */
 
 /* "On this day" content */
 .on-this-day {

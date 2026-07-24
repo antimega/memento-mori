@@ -223,12 +223,40 @@
         if (!markers.length) { mapEl.style.display = 'none'; return; }
 
         function initMap() {
-        var map = L.map('cityMap', { scrollWheelZoom: false, fadeAnimation: false });
+        // Keep panning inside a single world: no infinite east/west scroll,
+        // and no grey void past the poles. 85.0511° is the Web Mercator
+        // latitude limit (matches the tile coverage). The pins map (map.js)
+        // uses the same constraint.
+        var worldBounds = L.latLngBounds([-85.0511, -180], [85.0511, 180]);
+        var map = L.map('cityMap', {
+          scrollWheelZoom: false,
+          fadeAnimation: false,
+          maxBounds: worldBounds,
+          maxBoundsViscosity: 1.0,
+        });
         L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
           maxZoom: 19,
+          noWrap: true,   // don't repeat the world horizontally
           attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         }).addTo(map);
+        // Don't let zoom-out go below where one world fills the viewport (else
+        // grey shows around it). getBoundsZoom(..., true) is the smallest zoom
+        // whose view still fits inside the world; recompute it when the map is
+        // resized so it adapts to the container width.
+        function clampMinZoom() { map.setMinZoom(map.getBoundsZoom(worldBounds, true)); }
+        clampMinZoom();
+        map.on('resize', clampMinZoom);
         var bounds = [];
+        // Blue-dot pin (🔵) replacing Leaflet's default teardrop; the look
+        // lives in .mm-emoji-pin (css/style.css). Same icon as map.js,
+        // modal.js and flickr-viewer.js — keep them in step.
+        var pin = L.divIcon({
+          html: '🔵',
+          className: 'mm-emoji-pin',
+          iconSize: [18, 18],   // box padded around the ~12px glyph (no clip)
+          iconAnchor: [9, 9],   // centre the dot on the point
+          popupAnchor: [0, -9],
+        });
         markers.forEach(function (c) {
           var div = document.createElement('div');
           var strong = document.createElement('strong');
@@ -247,7 +275,7 @@
           });
           div.appendChild(a);
 
-          var marker = L.marker([c.lat, c.lng]).addTo(map).bindPopup(div);
+          var marker = L.marker([c.lat, c.lng], { icon: pin }).addTo(map).bindPopup(div);
           marker.on('click', function () {
             if (window.mmShowCity) window.mmShowCity(c.slug);
           });
