@@ -61,6 +61,16 @@
         return (entry.m && entry.m[0]) || '';
     }
 
+    // Where a story tile falls back when its thumbnail fails. `m` keeps the
+    // export's original name (.jpg) but the pipeline converts images to
+    // .webp, so try that first and the original second — the same order the
+    // viewers use. (The server checks the disk and emits just the one.)
+    function storyFallbacks(entry) {
+        var m0 = (entry.m && entry.m[0]) || '';
+        var webp = m0.replace(/\.(jpg|jpeg|png|gif)$/i, '.webp');
+        return webp !== m0 ? [webp, m0] : [m0];
+    }
+
     var mmTiles = {
         // Parity target: the post tile in templates/index.html
         post: function (ts, entry) {
@@ -101,7 +111,8 @@
         },
         // Parity target: the story tile in templates/index.html. The one
         // intentional difference from the server markup is that onerror is set
-        // as a property (not an attribute) to avoid quoting the media path.
+        // as a property (not an attribute) to avoid quoting the media path,
+        // and walks storyFallbacks() since the browser cannot check the disk.
         story: function (ts, entry) {
             var a = document.createElement('a');
             a.className = 'story-item timeline-story-tile';
@@ -113,8 +124,12 @@
             img.src = storyMedia(entry);
             img.alt = 'Instagram story';
             img.loading = 'lazy';
-            var original = (entry.m && entry.m[0]) || '';
-            img.onerror = function () { this.onerror = null; this.src = original; };
+            var fallbacks = storyFallbacks(entry);
+            img.onerror = function () {
+                var next = fallbacks.shift();
+                if (next === undefined) { this.onerror = null; return; }
+                this.src = next;
+            };
             a.appendChild(img);
 
             if (isVideo(entry.m && entry.m[0])) {

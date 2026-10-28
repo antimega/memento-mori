@@ -262,6 +262,63 @@ def test_stories_viewer_opens_and_does_not_auto_advance(page, base_url):
     assert page.locator("#storyViewer .media-slide").first.get_attribute("src") == shown
 
 
+def _story_tile_degrades(page, build_js):
+    """
+    Build a story tile whose thumbnail is missing and wait for its onerror
+    chain to settle; returns the final src and whether an image loaded.
+    """
+    return page.evaluate(
+        """build => new Promise(resolve => {
+            const ts = Object.keys(window.storiesData).find(k =>
+                !/\\.(mp4|mov|avi|webm)$/i.test(window.storiesData[k].m[0]));
+            const entry = Object.assign({}, window.storiesData[ts],
+                {th: undefined, dm: 'thumbnails/stories/missing.webp'});
+            const tile = (new Function('ts', 'entry', 'return ' + build))(ts, entry);
+            const img = tile.querySelector('img');
+            img.addEventListener('load', () =>
+                resolve({src: img.getAttribute('src'), loaded: img.naturalWidth > 0}));
+            document.body.appendChild(tile);
+            setTimeout(() => resolve({src: img.getAttribute('src'), loaded: false}), 4000);
+        })""",
+        build_js,
+    )
+
+
+def test_story_tile_falls_back_to_the_converted_media(page, base_url):
+    """
+    When a story thumbnail fails, both builders must land on a file that
+    exists. `m` keeps the export's .jpg name but only the .webp is on disk,
+    so falling straight back to m[0] left a broken tile.
+    """
+    page.goto(f"{base_url}/stories.html")
+    got = _story_tile_degrades(page, "window.mmStoriesGridTile(ts, entry)")
+    assert got["loaded"] and got["src"].endswith(".webp"), got
+
+    page.goto(f"{base_url}/index.html")
+    got = _story_tile_degrades(page, "window.mmTiles.story(ts, entry)")
+    assert got["loaded"] and got["src"].endswith(".webp"), got
+
+    # The server-rendered tile resolves the same fallback against the disk.
+    page.goto(f"{base_url}/stories.html")
+    got = page.evaluate(
+        """() => new Promise(resolve => {
+            const img = document.querySelector('.story-item img');
+            img.loading = 'eager';
+            img.addEventListener('load', () =>
+                img.src.indexOf('missing') < 0 &&
+                resolve({src: img.getAttribute('src'), loaded: img.naturalWidth > 0}));
+            img.src = 'thumbnails/stories/missing.webp';
+            setTimeout(() => resolve({src: img.getAttribute('src'), loaded: false}), 4000);
+        })"""
+    )
+    assert got["loaded"], got
+
+    # The deliberately missing thumbnails log a 404 each; any fallback that
+    # also 404'd has already failed the `loaded` checks above.
+    page._mm_errors[:] = [e for e in page._mm_errors
+                          if "status of 404" not in e]
+
+
 def test_stories_sorting_reorders_tiles(page, base_url):
     """Stories carry the same Newest/Oldest/Random row as posts, and it must
     order by TIME (the story import index is only roughly chronological) — the

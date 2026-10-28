@@ -504,6 +504,27 @@ class InstagramSiteGenerator:
         grid_template = self.jinja_env.get_template("grid.html")
         return grid_template.render(posts=grid_posts)
 
+    def _full_media_url(self, entry):
+        """
+        The full-size file a tile falls back to when its thumbnail fails.
+
+        `m` keeps the export's original names (e.g. .jpg), but the media
+        pipeline converts images to WebP and does not keep the original, so
+        pointing the fallback at m[0] 404s. Use the .webp beside it when that
+        is what is on disk — the same variant the viewers try first.
+        """
+        first_media = entry["m"][0] if entry.get("m") else ""
+        if not first_media:
+            return ""
+        webp_path = re.sub(
+            r"\.(jpg|jpeg|png|gif)$", ".webp", first_media, flags=re.I
+        )
+        if webp_path != first_media and os.path.exists(
+            os.path.join(self.output_dir, webp_path)
+        ):
+            return webp_path
+        return first_media
+
     def _get_display_media(self, post, use_lazy_loading=False):
         """Determine which media to use for the grid thumbnail."""
         result = {"url": "", "is_video": False}
@@ -615,7 +636,7 @@ class InstagramSiteGenerator:
                 "caption": story.get("tt", ""),
                 "timestamp": timestamp,
                 "lazy_load": Markup(' loading="lazy"') if i >= lazy_after else "",
-                "original_media": story["m"][0] if story["m"] else "",  # Include original media path
+                "original_media": self._full_media_url(story),
             })
         
         # Render the stories template
@@ -684,7 +705,7 @@ class InstagramSiteGenerator:
             "timestamp": str(timestamp),
             "media": media_url,
             "is_video": is_video,
-            "original_media": story["m"][0] if story["m"] else "",
+            "original_media": self._full_media_url(story),
             "lazy_load": Markup(' loading="lazy"'),
         }
 

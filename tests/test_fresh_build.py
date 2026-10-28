@@ -176,6 +176,26 @@ def test_stories_present(built):
     assert str(built["ts"]["story_video"]) in stories
 
 
+def test_story_tile_fallbacks_resolve_on_disk(built):
+    """
+    A story tile's onerror swaps in the full-size file when its thumbnail
+    fails. `m` keeps the export's .jpg name, but the pipeline writes only the
+    converted .webp — so a fallback taken from m[0] 404s and the tile shows
+    broken instead of degrading.
+    """
+    out = built["out"]
+    fallbacks = []
+    for page in ("stories.html", "index.html"):
+        html = (out / page).read_text(encoding="utf-8")
+        fallbacks += re.findall(r"onerror=\"this\.onerror=null; this\.src='([^']*)';\"", html)
+    assert fallbacks, "no story tile fallbacks found to check"
+    for src in fallbacks:
+        assert src and (out / src).exists(), f"story fallback {src!r} is not on disk"
+    # The fixture's image story was a .jpg in the export; its fallback must be
+    # the converted file, not the original name.
+    assert any(src.endswith(".webp") for src in fallbacks)
+
+
 def test_timeline_renders_only_the_newest_month(built):
     """
     The on-demand-months design: exactly one month panel in the HTML, with

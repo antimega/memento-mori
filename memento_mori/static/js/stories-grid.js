@@ -27,13 +27,21 @@
         if (entry.dm) return entry.dm;
         return (entry.m && entry.m[0]) || '';
     }
+    // Same fallback order as timeline-months.js: the converted .webp, then
+    // the export's original name that `m` keeps.
+    function storyFallbacks(entry) {
+        var m0 = (entry.m && entry.m[0]) || '';
+        var webp = m0.replace(/\.(jpg|jpeg|png|gif)$/i, '.webp');
+        return webp !== m0 ? [webp, m0] : [m0];
+    }
     function isVideo(url) {
         return /\.(mp4|mov|avi|webm)$/i.test(url || '');
     }
 
     // Parity target: the story tile in templates/stories_page.html. The one
     // intentional difference from the server markup is that onerror is set as
-    // a property (not an attribute) to avoid quoting the media path.
+    // a property (not an attribute) to avoid quoting the media path, and
+    // walks storyFallbacks() since the browser cannot check the disk.
     window.mmStoriesGridTile = function (timestamp, entry) {
         var a = document.createElement('a');
         a.className = 'story-item';
@@ -66,8 +74,12 @@
         img.src = storyMedia(entry);
         img.alt = entry.tt || 'Instagram Story';   // user data — set, not parsed
         img.loading = 'lazy';                      // appended tiles are below the fold
-        var original = (entry.m && entry.m[0]) || '';
-        img.onerror = function () { this.onerror = null; this.src = original; };
+        var fallbacks = storyFallbacks(entry);
+        img.onerror = function () {
+            var next = fallbacks.shift();
+            if (next === undefined) { this.onerror = null; return; }
+            this.src = next;
+        };
         media.appendChild(img);
         a.appendChild(media);
 

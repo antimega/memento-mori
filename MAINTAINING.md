@@ -480,7 +480,11 @@ places: the Jinja template (newest month + other pages) and `mmTiles` in JS.
 **If you change one, change the other.** The one intentional divergence: the
 story tile's `onerror` is a JS property in `mmTiles` (not an attribute), so a
 built story tile's `outerHTML` differs from the server's only by that attribute
-and by inter-tag whitespace — both harmless. Post tiles are otherwise identical.
+and by inter-tag whitespace — both harmless. Its target differs too, by
+necessity: the server resolves the fallback against the disk
+(`_full_media_url` — the converted `.webp`, since `m` keeps the export's `.jpg`
+name and the original is not kept), while the browser can't, so it tries the
+`.webp` variant and then `m[0]`, the order the viewers use. Post tiles are otherwise identical.
 
 ---
 
